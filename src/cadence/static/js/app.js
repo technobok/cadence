@@ -13,30 +13,47 @@
         return localStorage.getItem(THEME_KEY);
     }
 
-    function setTheme(theme) {
-        if (theme === 'system') {
+    function getThemeMode() {
+        // Returns 'system', 'light', or 'dark'
+        return getStoredTheme() || 'system';
+    }
+
+    function setTheme(mode) {
+        if (mode === 'system') {
             html.setAttribute('data-theme', getSystemTheme());
             localStorage.removeItem(THEME_KEY);
         } else {
-            html.setAttribute('data-theme', theme);
-            localStorage.setItem(THEME_KEY, theme);
+            html.setAttribute('data-theme', mode);
+            localStorage.setItem(THEME_KEY, mode);
         }
+        updateToggleButton(mode);
     }
 
-    function toggleTheme() {
-        const current = html.getAttribute('data-theme');
-        const next = current === 'light' ? 'dark' : 'light';
+    function cycleTheme() {
+        // Cycle: system → light → dark → system
+        const current = getThemeMode();
+        const next = current === 'system' ? 'light' : current === 'light' ? 'dark' : 'system';
         setTheme(next);
+    }
+
+    function updateToggleButton(mode) {
+        const toggle = document.getElementById('theme-toggle');
+        if (!toggle) return;
+
+        // Update button content based on mode
+        const icons = {
+            system: '\u2699',  // gear
+            light: '\u2600',   // sun
+            dark: '\u263E'     // moon
+        };
+        toggle.textContent = icons[mode] || icons.system;
+        toggle.setAttribute('title', 'Theme: ' + mode + ' (click to change)');
     }
 
     // Initialize theme on page load
     function initTheme() {
-        const stored = getStoredTheme();
-        if (stored) {
-            setTheme(stored);
-        } else {
-            setTheme('system');
-        }
+        const mode = getThemeMode();
+        setTheme(mode);
     }
 
     // Listen for system theme changes
@@ -53,7 +70,8 @@
     document.addEventListener('DOMContentLoaded', function() {
         const toggle = document.getElementById('theme-toggle');
         if (toggle) {
-            toggle.addEventListener('click', toggleTheme);
+            toggle.addEventListener('click', cycleTheme);
+            updateToggleButton(getThemeMode());
         }
     });
 })();

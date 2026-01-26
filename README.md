@@ -62,6 +62,39 @@ make worker    # Start notification worker
 make clean     # Remove temp files and database
 ```
 
+## Production Setup
+
+### Reverse Proxy (Caddy)
+
+When running behind a reverse proxy, enable proxy header support in `config.ini`:
+
+```ini
+[proxy]
+X_FORWARDED_FOR = 1
+X_FORWARDED_PROTO = 1
+X_FORWARDED_HOST = 1
+```
+
+This ensures Flask generates correct external URLs (for magic links, etc.) using the proxy's scheme and hostname.
+
+Example Caddyfile:
+
+```
+tasks.example.com {
+    reverse_proxy localhost:5000
+}
+```
+
+Caddy automatically handles TLS certificates and forwards the required `X-Forwarded-*` headers.
+
+### Docker
+
+```bash
+docker compose up -d
+```
+
+See `docker/` directory for Dockerfile and docker-compose.yml.
+
 ## Tech Stack
 
 - **Backend**: Flask, APSW (SQLite)

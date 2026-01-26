@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, render_template
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from cadence.db import close_db, init_db_command
 
@@ -53,7 +54,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 if config.has_option("database", "PATH"):
                     db_path = config.get("database", "PATH")
                     if not os.path.isabs(db_path):
-                        db_path = str(instance_path / db_path)
+                        db_path = str(project_root / db_path)
                     app.config["DATABASE_PATH"] = db_path
 
             if config.has_section("uploads"):
@@ -95,6 +96,20 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 )
                 app.config["TRUSTED_SESSION_DAYS"] = config.getint(
                     "auth", "TRUSTED_SESSION_DAYS", fallback=365
+                )
+
+            # Proxy settings - enable when running behind reverse proxy (Caddy, nginx)
+            if config.has_section("proxy"):
+                x_for = config.getint("proxy", "X_FORWARDED_FOR", fallback=1)
+                x_proto = config.getint("proxy", "X_FORWARDED_PROTO", fallback=1)
+                x_host = config.getint("proxy", "X_FORWARDED_HOST", fallback=1)
+                x_prefix = config.getint("proxy", "X_FORWARDED_PREFIX", fallback=0)
+                app.wsgi_app = ProxyFix(
+                    app.wsgi_app,
+                    x_for=x_for,
+                    x_proto=x_proto,
+                    x_host=x_host,
+                    x_prefix=x_prefix,
                 )
     else:
         app.config.from_mapping(test_config)

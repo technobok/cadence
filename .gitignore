@@ -14,6 +14,7 @@ build/
 # Instance data
 instance/
 !instance/.gitkeep
+config.ini
 
 # IDE
 .idea/

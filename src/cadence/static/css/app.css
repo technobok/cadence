@@ -78,16 +78,6 @@ table td {
     background: var(--pico-secondary-hover-background);
 }
 
-/* Show/hide theme icons based on current theme */
-[data-theme="light"] .theme-icon-dark,
-[data-theme="dark"] .theme-icon-light {
-    display: none;
-}
-
-[data-theme="light"] .theme-icon-light,
-[data-theme="dark"] .theme-icon-dark {
-    display: inline;
-}
 
 /* Footer */
 footer {

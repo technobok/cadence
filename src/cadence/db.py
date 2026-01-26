@@ -12,13 +12,16 @@ from flask import current_app, g
 def get_db() -> apsw.Connection:
     """Get the database connection for the current request."""
     if "db" not in g:
-        g.db = apsw.Connection(current_app.config["DATABASE_PATH"])
+        db_path = current_app.config["DATABASE_PATH"]
+        # Ensure parent directory exists
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        g.db = apsw.Connection(db_path)
+        # Set busy timeout first so other PRAGMAs can wait for locks
+        g.db.execute("PRAGMA busy_timeout = 5000;")
         # Enable foreign keys
         g.db.execute("PRAGMA foreign_keys = ON;")
         # Use WAL mode for better concurrency
         g.db.execute("PRAGMA journal_mode = WAL;")
-        # Set busy timeout to 5 seconds
-        g.db.execute("PRAGMA busy_timeout = 5000;")
     return g.db
 
 

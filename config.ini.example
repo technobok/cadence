@@ -30,3 +30,12 @@ DIRECTORY = instance/backups
 [auth]
 MAGIC_LINK_EXPIRY_SECONDS = 3600
 TRUSTED_SESSION_DAYS = 365
+
+# Enable when running behind a reverse proxy (Caddy, nginx, etc.)
+# Values indicate number of proxies to trust for each header
+# Set to 0 to disable, 1 for single proxy, 2+ for chained proxies
+#[proxy]
+#X_FORWARDED_FOR = 1
+#X_FORWARDED_PROTO = 1
+#X_FORWARDED_HOST = 1
+#X_FORWARDED_PREFIX = 0

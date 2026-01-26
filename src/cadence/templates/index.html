@@ -8,9 +8,15 @@
         <h1>Welcome to Cadence</h1>
     </header>
     <p>A self-contained task and issue tracker.</p>
+    {% if g.user %}
     <footer>
         <a href="#" role="button">View Tasks</a>
         <a href="#" role="button" class="outline">Create Task</a>
     </footer>
+    {% else %}
+    <footer>
+        <p>Please <a href="{{ url_for('auth.login') }}">log in or create an account</a> to continue.</p>
+    </footer>
+    {% endif %}
 </article>
 {% endblock %}
