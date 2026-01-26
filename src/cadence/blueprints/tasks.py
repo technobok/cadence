@@ -2,7 +2,9 @@
 
 from flask import (
     Blueprint,
+    Response,
     abort,
+    current_app,
     flash,
     g,
     redirect,
@@ -12,8 +14,9 @@ from flask import (
 )
 
 from cadence.blueprints.auth import login_required
-from cadence.models import VALID_STATUSES, Activity, Task, User
+from cadence.models import VALID_STATUSES, Activity, Attachment, Comment, Task, User
 from cadence.models.task import STATUS_TRANSITIONS
+from cadence.services import attachment_service
 
 bp = Blueprint("tasks", __name__, url_prefix="/tasks")
 
@@ -27,6 +30,34 @@ def render_partial_or_full(partial: str, full: str, **context):
     """Render partial template for HTMX, full page otherwise."""
     template = partial if is_htmx_request() else full
     return render_template(template, **context)
+
+
+def render_with_activity_oob(primary_template: str, task: Task, **context) -> str:
+    """Render primary template plus out-of-band activity update for HTMX."""
+    primary_html = render_template(primary_template, task=task, **context)
+
+    # Get fresh activity data
+    activities = Activity.get_for_task(task.id, limit=20)
+    activity_user_ids = {a.user_id for a in activities if a.user_id}
+
+    # Merge with existing users or create fresh
+    users = context.get("users", {})
+    for uid in activity_user_ids:
+        if uid not in users:
+            user = User.get_by_id(uid)
+            if user:
+                users[uid] = user
+
+    activity_html = render_template(
+        "tasks/_activity.html",
+        activities=activities,
+        users=users,
+    )
+
+    # Wrap activity in OOB swap div
+    oob_html = f'<div id="activity-section" hx-swap-oob="innerHTML">{activity_html}</div>'
+
+    return primary_html + oob_html
 
 
 @bp.route("/")
@@ -143,10 +174,18 @@ def view(task_uuid: str):
 
     owner = User.get_by_id(task.owner_id)
     activities = Activity.get_for_task(task.id, limit=20)
+    comments = Comment.get_for_task(task.id)
+    attachments = Attachment.get_for_task(task.id)
 
-    # Get users for activity display
+    # Get users for activity and comments display
     activity_user_ids = {a.user_id for a in activities if a.user_id}
-    activity_users = {u.id: u for u in [User.get_by_id(uid) for uid in activity_user_ids] if u}
+    comment_user_ids = {c.user_id for c in comments}
+    attachment_user_ids = {a.uploaded_by for a in attachments}
+    all_user_ids = activity_user_ids | comment_user_ids | attachment_user_ids
+    users = {u.id: u for u in [User.get_by_id(uid) for uid in all_user_ids] if u}
+
+    # Get blobs for attachments (for file size display)
+    blobs = {a.file_blob_id: a.get_blob() for a in attachments}
 
     # Get allowed status transitions
     allowed_transitions = STATUS_TRANSITIONS.get(task.status, [])
@@ -156,9 +195,13 @@ def view(task_uuid: str):
         task=task,
         owner=owner,
         activities=activities,
-        activity_users=activity_users,
+        comments=comments,
+        attachments=attachments,
+        users=users,
+        blobs=blobs,
         allowed_transitions=allowed_transitions,
         valid_statuses=VALID_STATUSES,
+        format_file_size=attachment_service.format_file_size,
     )
 
 
@@ -254,9 +297,9 @@ def change_status(task_uuid: str):
             flash(f"Status changed to {new_status}.", "success")
 
     if is_htmx_request():
-        # Return updated status section
+        # Return updated status section with OOB activity update
         allowed_transitions = STATUS_TRANSITIONS.get(task.status, [])
-        return render_template(
+        return render_with_activity_oob(
             "tasks/_status.html",
             task=task,
             allowed_transitions=allowed_transitions,
@@ -282,3 +325,240 @@ def delete(task_uuid: str):
     flash("Task deleted.", "success")
 
     return redirect(url_for("tasks.index"))
+
+
+# --- Comments ---
+
+
+@bp.route("/<task_uuid>/comments", methods=["POST"])
+@login_required
+def add_comment(task_uuid: str):
+    """Add a comment to a task."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Check access for private tasks
+    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    content = request.form.get("content", "").strip()
+    if not content:
+        flash("Comment cannot be empty.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    comment = Comment.create(task_id=task.id, user_id=g.user.id, content=content)
+
+    Activity.log(
+        task_id=task.id,
+        action="commented",
+        user_id=g.user.id,
+        details={"comment_id": comment.id},
+    )
+
+    if is_htmx_request():
+        # Return updated comments section with OOB activity update
+        comments = Comment.get_for_task(task.id)
+        comment_user_ids = {c.user_id for c in comments}
+        users = {u.id: u for u in [User.get_by_id(uid) for uid in comment_user_ids] if u}
+        return render_with_activity_oob(
+            "tasks/_comments.html",
+            task=task,
+            comments=comments,
+            users=users,
+        )
+
+    flash("Comment added.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+@bp.route("/<task_uuid>/comments/<comment_uuid>/delete", methods=["POST"])
+@login_required
+def delete_comment(task_uuid: str, comment_uuid: str):
+    """Delete a comment."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    comment = Comment.get_by_uuid(comment_uuid)
+    if comment is None or comment.task_id != task.id:
+        abort(404)
+        return
+
+    # Only comment author, task owner, or admin can delete
+    if comment.user_id != g.user.id and task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    comment.delete()
+
+    Activity.log(
+        task_id=task.id,
+        action="comment_deleted",
+        user_id=g.user.id,
+    )
+
+    if is_htmx_request():
+        comments = Comment.get_for_task(task.id)
+        comment_user_ids = {c.user_id for c in comments}
+        users = {u.id: u for u in [User.get_by_id(uid) for uid in comment_user_ids] if u}
+        return render_with_activity_oob(
+            "tasks/_comments.html",
+            task=task,
+            comments=comments,
+            users=users,
+        )
+
+    flash("Comment deleted.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+# --- Attachments ---
+
+
+@bp.route("/<task_uuid>/attachments", methods=["POST"])
+@login_required
+def upload_attachment(task_uuid: str):
+    """Upload an attachment to a task."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Check access for private tasks
+    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    if "file" not in request.files:
+        flash("No file selected.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    file = request.files["file"]
+    if file.filename == "":
+        flash("No file selected.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    # Check file size
+    file.seek(0, 2)  # Seek to end
+    size = file.tell()
+    file.seek(0)  # Reset to beginning
+
+    max_size = current_app.config.get("MAX_UPLOAD_SIZE", 10 * 1024 * 1024)
+    if size > max_size:
+        flash(f"File too large. Maximum size is {max_size // (1024 * 1024)}MB.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    attachment = attachment_service.save_uploaded_file(
+        file=file,
+        task_id=task.id,
+        uploaded_by=g.user.id,
+    )
+
+    Activity.log(
+        task_id=task.id,
+        action="attachment_added",
+        user_id=g.user.id,
+        details={"filename": attachment.original_filename},
+    )
+
+    if is_htmx_request():
+        attachments = Attachment.get_for_task(task.id)
+        attachment_user_ids = {a.uploaded_by for a in attachments}
+        users = {u.id: u for u in [User.get_by_id(uid) for uid in attachment_user_ids] if u}
+        blobs = {a.file_blob_id: a.get_blob() for a in attachments}
+        return render_with_activity_oob(
+            "tasks/_attachments.html",
+            task=task,
+            attachments=attachments,
+            users=users,
+            blobs=blobs,
+            format_file_size=attachment_service.format_file_size,
+        )
+
+    flash("File uploaded.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+@bp.route("/<task_uuid>/attachments/<attachment_uuid>")
+@login_required
+def download_attachment(task_uuid: str, attachment_uuid: str):
+    """Download an attachment."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Check access for private tasks
+    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    attachment = Attachment.get_by_uuid(attachment_uuid)
+    if attachment is None or attachment.task_id != task.id:
+        abort(404)
+        return
+
+    blob = attachment.get_blob()
+    if blob is None:
+        abort(404)
+        return
+
+    content = attachment_service.get_blob_content(blob)
+    if content is None:
+        abort(404)
+        return
+
+    return Response(
+        content,
+        mimetype=blob.mime_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{attachment.original_filename}"',
+            "Content-Length": str(blob.file_size),
+        },
+    )
+
+
+@bp.route("/<task_uuid>/attachments/<attachment_uuid>/delete", methods=["POST"])
+@login_required
+def delete_attachment(task_uuid: str, attachment_uuid: str):
+    """Delete an attachment."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    attachment = Attachment.get_by_uuid(attachment_uuid)
+    if attachment is None or attachment.task_id != task.id:
+        abort(404)
+        return
+
+    # Only uploader, task owner, or admin can delete
+    if attachment.uploaded_by != g.user.id and task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    filename = attachment.original_filename
+    attachment_service.delete_attachment(attachment)
+
+    Activity.log(
+        task_id=task.id,
+        action="attachment_deleted",
+        user_id=g.user.id,
+        details={"filename": filename},
+    )
+
+    if is_htmx_request():
+        attachments = Attachment.get_for_task(task.id)
+        attachment_user_ids = {a.uploaded_by for a in attachments}
+        users = {u.id: u for u in [User.get_by_id(uid) for uid in attachment_user_ids] if u}
+        blobs = {a.file_blob_id: a.get_blob() for a in attachments}
+        return render_with_activity_oob(
+            "tasks/_attachments.html",
+            task=task,
+            attachments=attachments,
+            users=users,
+            blobs=blobs,
+            format_file_size=attachment_service.format_file_size,
+        )
+
+    flash("Attachment deleted.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))

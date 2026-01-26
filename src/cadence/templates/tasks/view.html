@@ -45,31 +45,28 @@
 
 <article>
     <header>
+        <h3>Attachments</h3>
+    </header>
+    <div id="attachments-section">
+        {% include "tasks/_attachments.html" %}
+    </div>
+</article>
+
+<article>
+    <header>
+        <h3>Comments</h3>
+    </header>
+    <div id="comments-section">
+        {% include "tasks/_comments.html" %}
+    </div>
+</article>
+
+<article>
+    <header>
         <h3>Activity</h3>
     </header>
-    {% if activities %}
-    <ul class="activity-list">
-        {% for activity in activities %}
-        <li class="activity-item">
-            <span class="activity-action">{{ activity.action|replace('_', ' ')|title }}</span>
-            by {{ activity_users[activity.user_id].display_name or activity_users[activity.user_id].email if activity.user_id in activity_users else 'System' }}
-            <small class="activity-time">{{ activity.logged_at|localdatetime }}</small>
-            {% if activity.details %}
-            <div class="activity-details">
-                {% if activity.action == 'status_changed' %}
-                {{ activity.details.old }} &rarr; {{ activity.details.new }}
-                {% elif activity.action == 'updated' and activity.details.changes %}
-                {% for change in activity.details.changes %}
-                <small>{{ change.field }}: {{ change.old[:50] if change.old else '(empty)' }} &rarr; {{ change.new[:50] }}</small>
-                {% endfor %}
-                {% endif %}
-            </div>
-            {% endif %}
-        </li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p>No activity yet.</p>
-    {% endif %}
+    <div id="activity-section">
+        {% include "tasks/_activity.html" %}
+    </div>
 </article>
 {% endblock %}

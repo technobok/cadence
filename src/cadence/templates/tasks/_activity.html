@@ -1,0 +1,26 @@
+{% if activities %}
+<ul class="activity-list">
+    {% for activity in activities %}
+    <li class="activity-item">
+        <span class="activity-action">{{ activity.action|replace('_', ' ')|title }}</span>
+        by {{ users[activity.user_id].display_name or users[activity.user_id].email if activity.user_id in users else 'System' }}
+        <small class="activity-time">{{ activity.logged_at|localdatetime }}</small>
+        {% if activity.details %}
+        <div class="activity-details">
+            {% if activity.action == 'status_changed' %}
+            {{ activity.details.old }} &rarr; {{ activity.details.new }}
+            {% elif activity.action == 'updated' and activity.details.changes %}
+            {% for change in activity.details.changes %}
+            <small>{{ change.field }}: {{ change.old[:50] if change.old else '(empty)' }} &rarr; {{ change.new[:50] }}</small>
+            {% endfor %}
+            {% elif activity.action == 'attachment_added' or activity.action == 'attachment_deleted' %}
+            {{ activity.details.filename }}
+            {% endif %}
+        </div>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No activity yet.</p>
+{% endif %}

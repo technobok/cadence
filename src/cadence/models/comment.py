@@ -1,0 +1,113 @@
+"""Comment model."""
+
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
+
+from cadence.db import get_db, transaction
+
+
+@dataclass
+class Comment:
+    id: int
+    uuid: str
+    task_id: int
+    user_id: int
+    content: str
+    created_at: str
+    updated_at: str
+
+    @staticmethod
+    def _from_row(row: tuple[Any, ...]) -> Comment:
+        """Create Comment from database row."""
+        return Comment(
+            id=int(row[0]),
+            uuid=str(row[1]),
+            task_id=int(row[2]),
+            user_id=int(row[3]),
+            content=str(row[4]),
+            created_at=str(row[5]),
+            updated_at=str(row[6]),
+        )
+
+    @staticmethod
+    def get_by_id(comment_id: int) -> Comment | None:
+        """Get comment by ID."""
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "SELECT id, uuid, task_id, user_id, content, created_at, updated_at "
+            "FROM comment WHERE id = ?",
+            (comment_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            return Comment._from_row(row)
+        return None
+
+    @staticmethod
+    def get_by_uuid(comment_uuid: str) -> Comment | None:
+        """Get comment by UUID."""
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "SELECT id, uuid, task_id, user_id, content, created_at, updated_at "
+            "FROM comment WHERE uuid = ?",
+            (comment_uuid,),
+        )
+        row = cursor.fetchone()
+        if row:
+            return Comment._from_row(row)
+        return None
+
+    @staticmethod
+    def create(task_id: int, user_id: int, content: str) -> Comment:
+        """Create a new comment."""
+        now = datetime.now(UTC).isoformat()
+        comment_uuid = str(uuid.uuid4())
+
+        with transaction() as cursor:
+            cursor.execute(
+                "INSERT INTO comment (uuid, task_id, user_id, content, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (comment_uuid, task_id, user_id, content, now, now),
+            )
+            row = cursor.execute("SELECT last_insert_rowid()").fetchone()
+            comment_id = int(row[0]) if row else 0
+
+        return Comment(
+            id=comment_id,
+            uuid=comment_uuid,
+            task_id=task_id,
+            user_id=user_id,
+            content=content,
+            created_at=now,
+            updated_at=now,
+        )
+
+    @staticmethod
+    def get_for_task(task_id: int) -> list[Comment]:
+        """Get all comments for a task, oldest first."""
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "SELECT id, uuid, task_id, user_id, content, created_at, updated_at "
+            "FROM comment WHERE task_id = ? ORDER BY created_at ASC",
+            (task_id,),
+        )
+        return [Comment._from_row(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def count_for_task(task_id: int) -> int:
+        """Count comments for a task."""
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM comment WHERE task_id = ?", (task_id,))
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    def delete(self) -> None:
+        """Delete the comment."""
+        with transaction() as cursor:
+            cursor.execute("DELETE FROM comment WHERE id = ?", (self.id,))

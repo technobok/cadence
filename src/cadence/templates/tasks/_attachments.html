@@ -1,0 +1,44 @@
+{% if attachments %}
+<ul class="attachments-list">
+    {% for attachment in attachments %}
+    {% set blob = blobs.get(attachment.file_blob_id) %}
+    <li class="attachment-item">
+        <a href="{{ url_for('tasks.download_attachment', task_uuid=task.uuid, attachment_uuid=attachment.uuid) }}" class="attachment-link">
+            {{ attachment.original_filename }}
+        </a>
+        <small class="attachment-meta">
+            ({{ format_file_size(blob.file_size) if blob else 'unknown size' }})
+            uploaded by {{ users[attachment.uploaded_by].display_name or users[attachment.uploaded_by].email if attachment.uploaded_by in users else 'Unknown' }}
+            on {{ attachment.uploaded_at|localdate }}
+        </small>
+        {% if attachment.uploaded_by == g.user.id or task.owner_id == g.user.id or g.user.is_admin %}
+        <form method="POST"
+              action="{{ url_for('tasks.delete_attachment', task_uuid=task.uuid, attachment_uuid=attachment.uuid) }}"
+              hx-post="{{ url_for('tasks.delete_attachment', task_uuid=task.uuid, attachment_uuid=attachment.uuid) }}"
+              hx-target="#attachments-section"
+              hx-swap="innerHTML"
+              hx-confirm="Delete this attachment?"
+              style="display: inline;">
+            <button type="submit" class="outline secondary attachment-delete">Delete</button>
+        </form>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No attachments yet.</p>
+{% endif %}
+
+<form method="POST"
+      action="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
+      hx-post="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
+      hx-target="#attachments-section"
+      hx-swap="innerHTML"
+      hx-encoding="multipart/form-data"
+      class="attachment-form">
+    <label for="file">
+        Upload a file
+        <input type="file" id="file" name="file" required>
+    </label>
+    <button type="submit">Upload</button>
+</form>
