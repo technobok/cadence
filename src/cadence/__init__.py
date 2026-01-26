@@ -43,6 +43,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         MAX_UPLOAD_SIZE=10 * 1024 * 1024,  # 10MB
         MAGIC_LINK_EXPIRY_SECONDS=3600,
         TRUSTED_SESSION_DAYS=365,
+        HOST="0.0.0.0",
+        PORT=5000,
+        DEV_HOST="127.0.0.1",
+        DEV_PORT=5000,
     )
 
     if test_config is None:
@@ -60,6 +64,14 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     app.config["SECRET_KEY"] = config.get("server", "SECRET_KEY")
                 if config.has_option("server", "DEBUG"):
                     app.config["DEBUG"] = config.getboolean("server", "DEBUG")
+                if config.has_option("server", "HOST"):
+                    app.config["HOST"] = config.get("server", "HOST")
+                if config.has_option("server", "PORT"):
+                    app.config["PORT"] = config.getint("server", "PORT")
+                if config.has_option("server", "DEV_HOST"):
+                    app.config["DEV_HOST"] = config.get("server", "DEV_HOST")
+                if config.has_option("server", "DEV_PORT"):
+                    app.config["DEV_PORT"] = config.getint("server", "DEV_PORT")
 
             if config.has_section("database"):
                 if config.has_option("database", "PATH"):

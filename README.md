@@ -35,16 +35,16 @@ cp config.ini.example instance/config.ini
 make init-db
 
 # Run development server
-make run
+make rundev
 ```
 
-The app will be available at http://localhost:5000
+The app will be available at http://127.0.0.1:5000
 
 ## Configuration
 
 Copy `config.ini.example` to `instance/config.ini` and configure:
 
-- **[server]** - SECRET_KEY, DEBUG, HOST, PORT
+- **[server]** - SECRET_KEY, DEBUG, HOST, PORT, DEV_HOST, DEV_PORT
 - **[database]** - PATH to SQLite database
 - **[mail]** - SMTP settings for magic link emails
 - **[ntfy]** - ntfy server for push notifications
@@ -56,7 +56,8 @@ Copy `config.ini.example` to `instance/config.ini` and configure:
 ```bash
 make sync      # Install/update dependencies
 make init-db   # Create blank database
-make run       # Start dev server (0.0.0.0:5000)
+make rundev    # Start dev server (DEV_HOST:DEV_PORT, debug=True)
+make run       # Start server (HOST:PORT, production settings)
 make check     # Run ruff + ty (format, lint, typecheck)
 make worker    # Start notification worker
 make clean     # Remove temp files and database

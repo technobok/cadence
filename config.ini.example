@@ -1,8 +1,12 @@
 [server]
 SECRET_KEY = change-this-to-a-random-string
 DEBUG = False
+# Production settings (make run)
 HOST = 0.0.0.0
 PORT = 5000
+# Development settings (make rundev)
+DEV_HOST = 127.0.0.1
+DEV_PORT = 5000
 
 [database]
 PATH = instance/cadence.sqlite3

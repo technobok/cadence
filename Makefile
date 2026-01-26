@@ -1,4 +1,4 @@
-.PHONY: help sync install init-db run check clean worker
+.PHONY: help sync install init-db run rundev check clean worker
 
 SHELL := /bin/bash
 VENV_DIR := .venv_docker
@@ -13,7 +13,8 @@ help:
 	@echo "sync     - Sync dependencies with uv (creates venv if needed)"
 	@echo "install  - Alias for sync"
 	@echo "init-db  - Create a blank database"
-	@echo "run      - Run the Flask development server"
+	@echo "run      - Run server with production settings (HOST:PORT)"
+	@echo "rundev   - Run server with dev settings (DEV_HOST:DEV_PORT, debug=True)"
 	@echo "check    - Run ruff and ty for code quality"
 	@echo "worker   - Run the notification worker"
 	@echo "clean    - Remove temporary files and database"
@@ -30,8 +31,12 @@ init-db:
 	@echo "Database created. Run 'make run' to start the server."
 
 run:
-	@echo "--- Starting development server ---"
+	@echo "--- Starting server (production settings) ---"
 	@$(PYTHON) wsgi.py
+
+rundev:
+	@echo "--- Starting server (dev settings, debug=True) ---"
+	@$(PYTHON) wsgi.py --dev
 
 worker:
 	@echo "--- Starting notification worker ---"
