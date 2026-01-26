@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Set Up Profile - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h1>Welcome to Cadence</h1>
+        <p>Let's set up your profile.</p>
+    </header>
+
+    <form method="post">
+        <input type="hidden" name="trust" value="{{ trust }}">
+
+        <label for="display_name">
+            Your Name
+            <input type="text" id="display_name" name="display_name"
+                   placeholder="e.g. Jane Smith"
+                   required autofocus>
+        </label>
+
+        <button type="submit">Continue</button>
+    </form>
+</article>
+{% endblock %}

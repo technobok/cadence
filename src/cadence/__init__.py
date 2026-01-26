@@ -109,11 +109,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app.cli.add_command(init_db_command)
 
     # Register blueprints
-    # from cadence.blueprints import auth, tasks, admin, reports
-    # app.register_blueprint(auth.bp)
-    # app.register_blueprint(tasks.bp)
-    # app.register_blueprint(admin.bp)
-    # app.register_blueprint(reports.bp)
+    from cadence.blueprints import auth
+
+    app.register_blueprint(auth.bp)
 
     @app.route("/")
     def index():

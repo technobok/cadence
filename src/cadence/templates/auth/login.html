@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h1>Login to Cadence</h1>
+    </header>
+
+    <form method="post">
+        <label for="email">
+            Email Address
+            <input type="email" id="email" name="email"
+                   placeholder="you@example.com"
+                   required autofocus>
+        </label>
+
+        <label>
+            <input type="checkbox" name="trust" value="1" checked>
+            Trust this device (stay logged in for 1 year)
+        </label>
+
+        <button type="submit">Send Login Link</button>
+    </form>
+
+    <footer>
+        <small>We'll send you a magic link to log in. No password needed.</small>
+    </footer>
+</article>
+{% endblock %}

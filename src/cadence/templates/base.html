@@ -22,10 +22,10 @@
             <ul>
                 <li><a href="#">Tasks</a></li>
                 {% if g.user %}
-                <li><a href="#">{{ g.user.display_name or g.user.email }}</a></li>
-                <li><a href="#" role="button" class="outline secondary">Logout</a></li>
+                <li>{{ g.user.display_name or g.user.email }}</li>
+                <li><a href="{{ url_for('auth.logout') }}" role="button" class="outline secondary">Logout</a></li>
                 {% else %}
-                <li><a href="#" role="button" class="outline">Login</a></li>
+                <li><a href="{{ url_for('auth.login') }}" role="button" class="outline">Login</a></li>
                 {% endif %}
                 <li>
                     <button id="theme-toggle" class="outline secondary" aria-label="Toggle theme">
