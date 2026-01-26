@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Cadence{% endblock %}</title>
+
+    <!-- Vendor CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/pico.min.css') }}">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('index') }}" class="brand"><strong>Cadence</strong></a></li>
+            </ul>
+            <ul>
+                <li><a href="#">Tasks</a></li>
+                {% if g.user %}
+                <li><a href="#">{{ g.user.display_name or g.user.email }}</a></li>
+                <li><a href="#" role="button" class="outline secondary">Logout</a></li>
+                {% else %}
+                <li><a href="#" role="button" class="outline">Login</a></li>
+                {% endif %}
+                <li>
+                    <button id="theme-toggle" class="outline secondary" aria-label="Toggle theme">
+                        <span class="theme-icon-light">&#9728;</span>
+                        <span class="theme-icon-dark">&#9790;</span>
+                    </button>
+                </li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div id="flash-messages">
+            {% for category, message in messages %}
+            <article class="flash flash-{{ category }}">
+                {{ message }}
+            </article>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="container">
+        <small>Cadence - Task & Issue Tracker</small>
+    </footer>
+
+    <!-- Vendor JS -->
+    <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}"></script>
+
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,32 @@
+[server]
+SECRET_KEY = change-this-to-a-random-string
+DEBUG = False
+HOST = 0.0.0.0
+PORT = 5000
+
+[database]
+PATH = instance/cadence.sqlite3
+
+[mail]
+SMTP_SERVER = smtp.example.com
+SMTP_PORT = 587
+SMTP_USE_TLS = true
+SMTP_USERNAME =
+SMTP_PASSWORD =
+MAIL_SENDER = noreply@example.com
+
+[ntfy]
+SERVER = https://ntfy.sh
+
+[uploads]
+MAX_SIZE_MB = 10
+
+[blobs]
+DIRECTORY = instance/blobs
+
+[backups]
+DIRECTORY = instance/backups
+
+[auth]
+MAGIC_LINK_EXPIRY_SECONDS = 3600
+TRUSTED_SESSION_DAYS = 365

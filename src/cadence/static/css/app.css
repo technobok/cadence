@@ -1,0 +1,145 @@
+/* Cadence custom styles - compact and utilitarian */
+
+/* Make Pico more compact */
+:root {
+    --pico-font-size: 15px;
+    --pico-line-height: 1.4;
+    --pico-spacing: 0.75rem;
+    --pico-form-element-spacing-vertical: 0.5rem;
+    --pico-form-element-spacing-horizontal: 0.75rem;
+}
+
+/* Tighter nav */
+header nav {
+    padding: 0.5rem 0;
+}
+
+header nav ul li {
+    padding: 0.25rem 0.5rem;
+}
+
+.brand {
+    font-size: 1.1rem;
+}
+
+/* Compact buttons */
+[role="button"],
+button,
+input[type="submit"],
+input[type="button"] {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+}
+
+/* Compact form elements */
+input,
+select,
+textarea {
+    padding: 0.4rem 0.6rem;
+}
+
+/* Compact tables */
+table th,
+table td {
+    padding: 0.5rem 0.75rem;
+}
+
+/* Flash messages */
+.flash {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: var(--pico-border-radius);
+}
+
+.flash-error {
+    background: var(--pico-del-color);
+    color: white;
+}
+
+.flash-success {
+    background: var(--pico-ins-color);
+    color: white;
+}
+
+.flash-info {
+    background: var(--pico-primary);
+    color: white;
+}
+
+/* Theme toggle button */
+#theme-toggle {
+    padding: 0.3rem 0.5rem;
+    min-width: auto;
+    border: none;
+    background: transparent;
+}
+
+#theme-toggle:hover {
+    background: var(--pico-secondary-hover-background);
+}
+
+/* Show/hide theme icons based on current theme */
+[data-theme="light"] .theme-icon-dark,
+[data-theme="dark"] .theme-icon-light {
+    display: none;
+}
+
+[data-theme="light"] .theme-icon-light,
+[data-theme="dark"] .theme-icon-dark {
+    display: inline;
+}
+
+/* Footer */
+footer {
+    margin-top: 2rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--pico-muted-border-color);
+}
+
+footer small {
+    color: var(--pico-muted-color);
+}
+
+/* HTMX loading indicator */
+.htmx-request {
+    opacity: 0.7;
+    transition: opacity 200ms;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline-block;
+}
+
+.htmx-indicator {
+    display: none;
+}
+
+/* Task status badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.status-new {
+    background: var(--pico-primary);
+    color: white;
+}
+
+.status-in-progress {
+    background: #f59e0b;
+    color: white;
+}
+
+.status-on-hold {
+    background: var(--pico-muted-color);
+    color: white;
+}
+
+.status-complete {
+    background: var(--pico-ins-color);
+    color: white;
+}
