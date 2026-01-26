@@ -34,14 +34,14 @@ Self-hosted task/issue tracker built with Python, Flask, HTMX, and SQLite (via A
 - [x] "Trust this device" persistent cookie (365 days)
 - [x] Logout
 
-### Phase 3: Core Task Management
-- [ ] Task model
-- [ ] Fixed status workflow (New → In Progress → On Hold → Complete)
-- [ ] Task list view with filtering
-- [ ] Task detail view
-- [ ] Task create/edit forms (HTMX)
-- [ ] Status transitions
-- [ ] Activity logging (immutable)
+### Phase 3: Core Task Management ✓
+- [x] Task model
+- [x] Fixed status workflow (New → In Progress → On Hold → Complete)
+- [x] Task list view with filtering
+- [x] Task detail view
+- [x] Task create/edit forms (HTMX)
+- [x] Status transitions
+- [x] Activity logging (immutable)
 
 ### Phase 4: Comments & Attachments
 - [ ] Comment model
@@ -120,11 +120,11 @@ These are specified in the original requirements but deferred to future phases:
 - [x] "Trust this device" creates persistent session
 - [x] Logout clears session
 
-### Phase 3
-- [ ] Can create/edit/view tasks
-- [ ] Status transitions work
-- [ ] Activity log records all changes
-- [ ] Task list filters by status
+### Phase 3 ✓
+- [x] Can create/edit/view tasks
+- [x] Status transitions work
+- [x] Activity log records all changes
+- [x] Task list filters by status
 
 ### Phase 4
 - [ ] File upload works
