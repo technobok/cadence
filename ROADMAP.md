@@ -44,11 +44,13 @@ Self-hosted task/issue tracker built with Python, Flask, HTMX, and SQLite (via A
 - [x] Activity logging (immutable)
 
 ### Phase 4: Comments & Attachments
-- [ ] Comment model
-- [ ] Add comment form (HTMX partial)
-- [ ] Attachment model with hash-based deduplication
-- [ ] File upload handling
-- [ ] File download endpoint
+- [x] Comment model
+- [x] Add comment form (HTMX partial)
+- [x] Attachment model with hash-based deduplication
+- [x] File upload handling
+- [x] File download endpoint
+- [ ] Unified timeline view (merge comments/attachments into activity section)
+- [ ] Simplified markdown in task descriptions and comments
 
 ### Phase 5: Watching & Notifications
 - [ ] Task watchers (add/remove)
@@ -127,10 +129,12 @@ These are specified in the original requirements but deferred to future phases:
 - [x] Task list filters by status
 
 ### Phase 4
-- [ ] File upload works
-- [ ] Duplicate files are deduplicated
-- [ ] Download returns correct file with original filename
-- [ ] Comments can be added to tasks
+- [x] File upload works
+- [x] Duplicate files are deduplicated
+- [x] Download returns correct file with original filename
+- [x] Comments can be added to tasks
+- [ ] Unified timeline view works
+- [ ] Markdown renders in descriptions and comments
 
 ### Phase 5
 - [ ] `make worker` starts background worker
