@@ -25,14 +25,14 @@ Self-hosted task/issue tracker built with Python, Flask, HTMX, and SQLite (via A
 - [x] Static file serving (htmx, pico vendored)
 - [x] Dark mode toggle
 
-### Phase 2: Authentication
-- [ ] User model and CRUD
-- [ ] Magic link generation (signed tokens)
-- [ ] Email sending (SMTP)
-- [ ] Magic link verification endpoint
-- [ ] Session handling
-- [ ] "Trust this device" persistent cookie (365 days)
-- [ ] Logout
+### Phase 2: Authentication ✓
+- [x] User model and CRUD
+- [x] Magic link generation (signed tokens)
+- [x] Email sending (SMTP)
+- [x] Magic link verification endpoint
+- [x] Session handling
+- [x] "Trust this device" persistent cookie (365 days)
+- [x] Logout
 
 ### Phase 3: Core Task Management
 - [ ] Task model
@@ -114,11 +114,11 @@ These are specified in the original requirements but deferred to future phases:
 - [x] `make run` starts server on 0.0.0.0:5000
 - [x] `make check` passes (ruff + ty)
 
-### Phase 2
-- [ ] Can request magic link via email
-- [ ] Link logs user in
-- [ ] "Trust this device" creates persistent session
-- [ ] Logout clears session
+### Phase 2 ✓
+- [x] Can request magic link via email
+- [x] Link logs user in
+- [x] "Trust this device" creates persistent session
+- [x] Logout clears session
 
 ### Phase 3
 - [ ] Can create/edit/view tasks
