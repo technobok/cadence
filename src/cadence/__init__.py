@@ -2,13 +2,24 @@
 
 import configparser
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from cadence.db import close_db, init_db_command
+
+
+def get_user_timezone() -> ZoneInfo:
+    """Get user's timezone from request header or cookie."""
+    tz_name = request.headers.get("X-Timezone") or request.cookies.get("tz") or "UTC"
+    try:
+        return ZoneInfo(tz_name)
+    except Exception:
+        return ZoneInfo("UTC")
 
 
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
@@ -104,7 +115,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 x_proto = config.getint("proxy", "X_FORWARDED_PROTO", fallback=1)
                 x_host = config.getint("proxy", "X_FORWARDED_HOST", fallback=1)
                 x_prefix = config.getint("proxy", "X_FORWARDED_PREFIX", fallback=0)
-                app.wsgi_app = ProxyFix(
+                app.wsgi_app = ProxyFix(  # type: ignore[assignment]
                     app.wsgi_app,
                     x_for=x_for,
                     x_proto=x_proto,
@@ -123,10 +134,43 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
 
+    # Jinja filters for date formatting
+    @app.template_filter("localdate")
+    def localdate_filter(iso_string: str | None) -> str:
+        """Format ISO date string in user's timezone (date only)."""
+        if not iso_string:
+            return ""
+        try:
+            dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            user_tz = get_user_timezone()
+            local_dt = dt.astimezone(user_tz)
+            return local_dt.strftime("%b %d, %Y")
+        except Exception:
+            return iso_string[:10] if iso_string else ""
+
+    @app.template_filter("localdatetime")
+    def localdatetime_filter(iso_string: str | None) -> str:
+        """Format ISO datetime string in user's timezone (with time and tz)."""
+        if not iso_string:
+            return ""
+        try:
+            dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            user_tz = get_user_timezone()
+            local_dt = dt.astimezone(user_tz)
+            tz_abbr = local_dt.strftime("%Z")
+            return local_dt.strftime(f"%b %d, %Y %H:%M {tz_abbr}")
+        except Exception:
+            return iso_string[:16].replace("T", " ") if iso_string else ""
+
     # Register blueprints
-    from cadence.blueprints import auth
+    from cadence.blueprints import auth, tasks
 
     app.register_blueprint(auth.bp)
+    app.register_blueprint(tasks.bp)
 
     @app.route("/")
     def index():

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Edit Task' if task else 'New Task' }} - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h1>{{ 'Edit Task' if task else 'New Task' }}</h1>
+    </header>
+
+    <form method="POST">
+        <label for="title">
+            Title
+            <input type="text" id="title" name="title" value="{{ title or '' }}" required autofocus>
+        </label>
+
+        <label for="description">
+            Description
+            <textarea id="description" name="description" rows="5">{{ description or '' }}</textarea>
+        </label>
+
+        <label for="due_date">
+            Due Date <small>(optional)</small>
+            <input type="date" id="due_date" name="due_date" value="{{ due_date or '' }}">
+        </label>
+
+        <label>
+            <input type="checkbox" id="is_private" name="is_private" value="1" {{ 'checked' if is_private else '' }}>
+            Private (only visible to you)
+        </label>
+
+        <footer class="form-actions">
+            <button type="button" class="outline secondary" onclick="location.href='{{ url_for('tasks.view', task_uuid=task.uuid) if task else url_for('tasks.index') }}'">Cancel</button>
+            <button type="submit">{{ 'Save Changes' if task else 'Create Task' }}</button>
+        </footer>
+    </form>
+</article>
+{% endblock %}

@@ -10,8 +10,8 @@
     <p>A self-contained task and issue tracker.</p>
     {% if g.user %}
     <footer>
-        <a href="#" role="button">View Tasks</a>
-        <a href="#" role="button" class="outline">Create Task</a>
+        <a href="{{ url_for('tasks.index') }}" role="button">View Tasks</a>
+        <a href="{{ url_for('tasks.create') }}" role="button" class="outline">Create Task</a>
     </footer>
     {% else %}
     <footer>

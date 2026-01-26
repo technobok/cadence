@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks - Cadence{% endblock %}
+
+{% block content %}
+<div class="tasks-page">
+    <header>
+        <hgroup>
+            <h1>Tasks</h1>
+            <p>{{ total_count }} task{{ 's' if total_count != 1 else '' }} total</p>
+        </hgroup>
+        <button type="button" onclick="location.href='{{ url_for('tasks.create') }}'">New Task</button>
+    </header>
+
+    <div class="filters">
+        <fieldset role="group">
+            <a href="{{ url_for('tasks.index') }}" role="button" class="{{ 'primary' if not status_filter else 'outline' }}">
+                All ({{ total_count }})
+            </a>
+            {% for status in valid_statuses %}
+            <a href="{{ url_for('tasks.index', status=status) }}" role="button" class="{{ 'primary' if status_filter == status else 'outline' }}">
+                {{ status|replace('_', ' ')|title }} ({{ status_counts[status] }})
+            </a>
+            {% endfor %}
+        </fieldset>
+        <fieldset role="group">
+            <a href="{{ url_for('tasks.index', status=status_filter) if status_filter else url_for('tasks.index') }}" role="button" class="{{ 'secondary' if not owner_filter else 'outline secondary' }}">
+                All Owners
+            </a>
+            <a href="{{ url_for('tasks.index', status=status_filter, owner='me') if status_filter else url_for('tasks.index', owner='me') }}" role="button" class="{{ 'secondary' if owner_filter == 'me' else 'outline secondary' }}">
+                My Tasks
+            </a>
+        </fieldset>
+    </div>
+
+    <div id="task-list">
+        {% include "tasks/_list.html" %}
+    </div>
+</div>
+{% endblock %}

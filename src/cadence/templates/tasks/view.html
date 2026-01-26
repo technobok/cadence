@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ task.title }} - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <hgroup>
+            <h1>{{ task.title }}</h1>
+            <p>
+                Created by {{ owner.display_name or owner.email if owner else 'Unknown' }}
+                on {{ task.created_at|localdate }}
+                {% if task.is_private %}<small>(private)</small>{% endif %}
+            </p>
+        </hgroup>
+        {% if task.owner_id == g.user.id or g.user.is_admin %}
+        <div class="task-actions">
+            <button type="button" class="outline" onclick="location.href='{{ url_for('tasks.edit', task_uuid=task.uuid) }}'">Edit</button>
+            <form method="POST" action="{{ url_for('tasks.delete', task_uuid=task.uuid) }}" style="display: inline;">
+                <button type="submit" class="outline contrast" onclick="return confirm('Delete this task?')">Delete...</button>
+            </form>
+        </div>
+        {% endif %}
+    </header>
+
+    <div id="task-status">
+        {% include "tasks/_status.html" %}
+    </div>
+
+    {% if task.due_date %}
+    <p><strong>Due:</strong> {{ task.due_date|localdate }}</p>
+    {% endif %}
+
+    {% if task.description %}
+    <div class="task-description">
+        <h3>Description</h3>
+        <p>{{ task.description }}</p>
+    </div>
+    {% endif %}
+
+    <footer>
+        <a href="{{ url_for('tasks.index') }}">&larr; Back to tasks</a>
+    </footer>
+</article>
+
+<article>
+    <header>
+        <h3>Activity</h3>
+    </header>
+    {% if activities %}
+    <ul class="activity-list">
+        {% for activity in activities %}
+        <li class="activity-item">
+            <span class="activity-action">{{ activity.action|replace('_', ' ')|title }}</span>
+            by {{ activity_users[activity.user_id].display_name or activity_users[activity.user_id].email if activity.user_id in activity_users else 'System' }}
+            <small class="activity-time">{{ activity.logged_at|localdatetime }}</small>
+            {% if activity.details %}
+            <div class="activity-details">
+                {% if activity.action == 'status_changed' %}
+                {{ activity.details.old }} &rarr; {{ activity.details.new }}
+                {% elif activity.action == 'updated' and activity.details.changes %}
+                {% for change in activity.details.changes %}
+                <small>{{ change.field }}: {{ change.old[:50] if change.old else '(empty)' }} &rarr; {{ change.new[:50] }}</small>
+                {% endfor %}
+                {% endif %}
+            </div>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No activity yet.</p>
+    {% endif %}
+</article>
+{% endblock %}

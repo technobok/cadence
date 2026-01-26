@@ -98,3 +98,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     });
 });
+
+// Send browser timezone with all requests
+(function() {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    // Set as HTMX header for AJAX requests
+    document.body.setAttribute('hx-headers', JSON.stringify({'X-Timezone': tz}));
+    // Set as cookie for full page requests
+    document.cookie = 'tz=' + tz + ';path=/;SameSite=Lax';
+})();
