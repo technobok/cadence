@@ -32,27 +32,25 @@ def render_partial_or_full(partial: str, full: str, **context):
     return render_template(template, **context)
 
 
+def render_activity(task: Task) -> str:
+    """Render the activity/timeline section for a task."""
+    activities = Activity.get_for_task(task.id, limit=50)
+    activity_user_ids = {a.user_id for a in activities if a.user_id}
+    users = {u.id: u for u in [User.get_by_id(uid) for uid in activity_user_ids] if u}
+
+    return render_template(
+        "tasks/_activity.html",
+        task=task,
+        activities=activities,
+        users=users,
+        format_file_size=attachment_service.format_file_size,
+    )
+
+
 def render_with_activity_oob(primary_template: str, task: Task, **context) -> str:
     """Render primary template plus out-of-band activity update for HTMX."""
     primary_html = render_template(primary_template, task=task, **context)
-
-    # Get fresh activity data
-    activities = Activity.get_for_task(task.id, limit=20)
-    activity_user_ids = {a.user_id for a in activities if a.user_id}
-
-    # Merge with existing users or create fresh
-    users = context.get("users", {})
-    for uid in activity_user_ids:
-        if uid not in users:
-            user = User.get_by_id(uid)
-            if user:
-                users[uid] = user
-
-    activity_html = render_template(
-        "tasks/_activity.html",
-        activities=activities,
-        users=users,
-    )
+    activity_html = render_activity(task)
 
     # Wrap activity in OOB swap div
     oob_html = f'<div id="activity-section" hx-swap-oob="innerHTML">{activity_html}</div>'
@@ -173,19 +171,11 @@ def view(task_uuid: str):
         abort(403)
 
     owner = User.get_by_id(task.owner_id)
-    activities = Activity.get_for_task(task.id, limit=20)
-    comments = Comment.get_for_task(task.id)
-    attachments = Attachment.get_for_task(task.id)
+    activities = Activity.get_for_task(task.id, limit=50)
 
-    # Get users for activity and comments display
+    # Get users for activity display
     activity_user_ids = {a.user_id for a in activities if a.user_id}
-    comment_user_ids = {c.user_id for c in comments}
-    attachment_user_ids = {a.uploaded_by for a in attachments}
-    all_user_ids = activity_user_ids | comment_user_ids | attachment_user_ids
-    users = {u.id: u for u in [User.get_by_id(uid) for uid in all_user_ids] if u}
-
-    # Get blobs for attachments (for file size display)
-    blobs = {a.file_blob_id: a.get_blob() for a in attachments}
+    users = {u.id: u for u in [User.get_by_id(uid) for uid in activity_user_ids] if u}
 
     # Get allowed status transitions
     allowed_transitions = STATUS_TRANSITIONS.get(task.status, [])
@@ -195,10 +185,7 @@ def view(task_uuid: str):
         task=task,
         owner=owner,
         activities=activities,
-        comments=comments,
-        attachments=attachments,
         users=users,
-        blobs=blobs,
         allowed_transitions=allowed_transitions,
         valid_statuses=VALID_STATUSES,
         format_file_size=attachment_service.format_file_size,
@@ -354,20 +341,11 @@ def add_comment(task_uuid: str):
         task_id=task.id,
         action="commented",
         user_id=g.user.id,
-        details={"comment_id": comment.id},
+        details={"comment_uuid": comment.uuid, "content": content},
     )
 
     if is_htmx_request():
-        # Return updated comments section with OOB activity update
-        comments = Comment.get_for_task(task.id)
-        comment_user_ids = {c.user_id for c in comments}
-        users = {u.id: u for u in [User.get_by_id(uid) for uid in comment_user_ids] if u}
-        return render_with_activity_oob(
-            "tasks/_comments.html",
-            task=task,
-            comments=comments,
-            users=users,
-        )
+        return render_activity(task)
 
     flash("Comment added.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))
@@ -400,15 +378,7 @@ def delete_comment(task_uuid: str, comment_uuid: str):
     )
 
     if is_htmx_request():
-        comments = Comment.get_for_task(task.id)
-        comment_user_ids = {c.user_id for c in comments}
-        users = {u.id: u for u in [User.get_by_id(uid) for uid in comment_user_ids] if u}
-        return render_with_activity_oob(
-            "tasks/_comments.html",
-            task=task,
-            comments=comments,
-            users=users,
-        )
+        return render_activity(task)
 
     flash("Comment deleted.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))
@@ -455,26 +425,20 @@ def upload_attachment(task_uuid: str):
         uploaded_by=g.user.id,
     )
 
+    blob = attachment.get_blob()
     Activity.log(
         task_id=task.id,
         action="attachment_added",
         user_id=g.user.id,
-        details={"filename": attachment.original_filename},
+        details={
+            "attachment_uuid": attachment.uuid,
+            "filename": attachment.original_filename,
+            "file_size": blob.file_size if blob else 0,
+        },
     )
 
     if is_htmx_request():
-        attachments = Attachment.get_for_task(task.id)
-        attachment_user_ids = {a.uploaded_by for a in attachments}
-        users = {u.id: u for u in [User.get_by_id(uid) for uid in attachment_user_ids] if u}
-        blobs = {a.file_blob_id: a.get_blob() for a in attachments}
-        return render_with_activity_oob(
-            "tasks/_attachments.html",
-            task=task,
-            attachments=attachments,
-            users=users,
-            blobs=blobs,
-            format_file_size=attachment_service.format_file_size,
-        )
+        return render_activity(task)
 
     flash("File uploaded.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))
@@ -547,18 +511,7 @@ def delete_attachment(task_uuid: str, attachment_uuid: str):
     )
 
     if is_htmx_request():
-        attachments = Attachment.get_for_task(task.id)
-        attachment_user_ids = {a.uploaded_by for a in attachments}
-        users = {u.id: u for u in [User.get_by_id(uid) for uid in attachment_user_ids] if u}
-        blobs = {a.file_blob_id: a.get_blob() for a in attachments}
-        return render_with_activity_oob(
-            "tasks/_attachments.html",
-            task=task,
-            attachments=attachments,
-            users=users,
-            blobs=blobs,
-            format_file_size=attachment_service.format_file_size,
-        )
+        return render_activity(task)
 
     flash("Attachment deleted.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))

@@ -1,21 +1,67 @@
 {% if activities %}
 <ul class="activity-list">
     {% for activity in activities %}
-    <li class="activity-item">
-        <span class="activity-action">{{ activity.action|replace('_', ' ')|title }}</span>
-        by {{ users[activity.user_id].display_name or users[activity.user_id].email if activity.user_id in users else 'System' }}
-        <small class="activity-time">{{ activity.logged_at|localdatetime }}</small>
-        {% if activity.details %}
+    <li class="activity-item {% if activity.action == 'commented' %}activity-comment{% elif activity.action == 'attachment_added' %}activity-attachment{% endif %}">
+        <div class="activity-header">
+            <strong>{{ users[activity.user_id].display_name or users[activity.user_id].email if activity.user_id in users else 'System' }}</strong>
+            <span class="activity-action-text">{{ activity.action|replace('_', ' ') }}</span>
+            <small class="activity-time">{{ activity.logged_at|localdatetime }}</small>
+        </div>
+
+        {% if activity.action == 'commented' and activity.details and activity.details.content %}
+        <div class="activity-content">
+            <div class="comment-content">{{ activity.details.content }}</div>
+            {% if activity.details.comment_uuid and (activity.user_id == g.user.id or task.owner_id == g.user.id or g.user.is_admin) %}
+            <form method="POST"
+                  action="{{ url_for('tasks.delete_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
+                  hx-post="{{ url_for('tasks.delete_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
+                  hx-target="#activity-section"
+                  hx-swap="innerHTML"
+                  class="activity-delete-form">
+                <button type="submit" class="outline secondary activity-delete" onclick="return confirm('Delete this comment?')">Delete</button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% elif activity.action == 'attachment_added' and activity.details %}
+        <div class="activity-content">
+            {% if activity.details.attachment_uuid %}
+            <a href="{{ url_for('tasks.download_attachment', task_uuid=task.uuid, attachment_uuid=activity.details.attachment_uuid) }}" class="attachment-link">
+                {{ activity.details.filename }}
+            </a>
+            {% if activity.details.file_size %}
+            <small class="attachment-meta">({{ format_file_size(activity.details.file_size) }})</small>
+            {% endif %}
+            {% if activity.user_id == g.user.id or task.owner_id == g.user.id or g.user.is_admin %}
+            <form method="POST"
+                  action="{{ url_for('tasks.delete_attachment', task_uuid=task.uuid, attachment_uuid=activity.details.attachment_uuid) }}"
+                  hx-post="{{ url_for('tasks.delete_attachment', task_uuid=task.uuid, attachment_uuid=activity.details.attachment_uuid) }}"
+                  hx-target="#activity-section"
+                  hx-swap="innerHTML"
+                  class="activity-delete-form">
+                <button type="submit" class="outline secondary activity-delete" onclick="return confirm('Delete this attachment?')">Delete</button>
+            </form>
+            {% endif %}
+            {% else %}
+            {{ activity.details.filename }}
+            {% endif %}
+        </div>
+
+        {% elif activity.action == 'attachment_deleted' and activity.details %}
         <div class="activity-details">
-            {% if activity.action == 'status_changed' %}
+            <small>{{ activity.details.filename }}</small>
+        </div>
+
+        {% elif activity.action == 'status_changed' and activity.details %}
+        <div class="activity-details">
             {{ activity.details.old }} &rarr; {{ activity.details.new }}
-            {% elif activity.action == 'updated' and activity.details.changes %}
+        </div>
+
+        {% elif activity.action == 'updated' and activity.details and activity.details.changes %}
+        <div class="activity-details">
             {% for change in activity.details.changes %}
             <small>{{ change.field }}: {{ change.old[:50] if change.old else '(empty)' }} &rarr; {{ change.new[:50] }}</small>
             {% endfor %}
-            {% elif activity.action == 'attachment_added' or activity.action == 'attachment_deleted' %}
-            {{ activity.details.filename }}
-            {% endif %}
         </div>
         {% endif %}
     </li>
@@ -24,3 +70,32 @@
 {% else %}
 <p>No activity yet.</p>
 {% endif %}
+
+<div class="timeline-forms">
+    <form method="POST"
+          action="{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}"
+          hx-post="{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}"
+          hx-target="#activity-section"
+          hx-swap="innerHTML"
+          class="comment-form">
+        <label for="content">
+            Add a comment
+            <textarea id="content" name="content" rows="3" required></textarea>
+        </label>
+        <button type="submit">Post Comment</button>
+    </form>
+
+    <form method="POST"
+          action="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
+          hx-post="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
+          hx-target="#activity-section"
+          hx-swap="innerHTML"
+          hx-encoding="multipart/form-data"
+          class="attachment-form">
+        <label for="file">
+            Upload a file
+            <input type="file" id="file" name="file" required>
+        </label>
+        <button type="submit">Upload</button>
+    </form>
+</div>
