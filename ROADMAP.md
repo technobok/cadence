@@ -80,12 +80,12 @@ These are specified in the original requirements but deferred to future phases:
 - Full text search
 - Groups (users can only belong to groups, no nested groups)
 - Subtasks / task hierarchy
+- Tags/lables for tasks (using Tom Select), multiple tags per task permitted. Subtasks inherit parent tags by default, new tags can be created in place with tom-select; tags can be assigned a colour from the selection of picocss colours
 - Custom task types and workflows
 - Recurring tasks
 - Private tasks / ACL
 - Batched notifications
 - Charting / advanced reporting
-- Typeahead for user selection
 
 ---
 

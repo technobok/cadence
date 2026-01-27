@@ -1,45 +1,34 @@
-<p>
-    <strong>Watchers:</strong>
-    {% if watcher_count == 0 %}
-    <span class="muted">None</span>
-    {% else %}
-    <span>{{ watcher_count }} {% if watcher_count == 1 %}person{% else %}people{% endif %}</span>
-    {% endif %}
-</p>
+<p><strong>Watchers:</strong></p>
 
+{% if can_manage_watchers %}
+<div class="watchers-control">
+    <select id="watchers-select" name="user_ids" multiple placeholder="Type to add..."></select>
+</div>
+<script type="application/json" id="watchers-data">
+{
+    "watchers": [
+        {% set owner_watcher = watchers|selectattr('id', 'eq', task.owner_id)|first %}
+        {% if owner_watcher %}{"id": {{ owner_watcher.id }}, "text": "{{ (owner_watcher.display_name or owner_watcher.email)|e }}"}{% endif %}
+        {% for w in watchers if w.id != task.owner_id %}{% if owner_watcher or not loop.first %},{% endif %}
+        {"id": {{ w.id }}, "text": "{{ (w.display_name or w.email)|e }}"}{% endfor %}
+    ],
+    "addUrl": "{{ url_for('tasks.add_watcher', task_uuid=task.uuid) }}",
+    "removeUrlBase": "{{ url_for('tasks.remove_watcher', task_uuid=task.uuid, user_id=0)|replace('/0/', '/{id}/') }}",
+    "searchUrl": "{{ url_for('tasks.search_users', task_uuid=task.uuid) }}",
+    "ownerId": {{ task.owner_id }}
+}
+</script>
+{% else %}
 {% if watchers %}
 <ul class="watcher-list compact">
     {% for w in watchers %}
     <li>
         {{ w.display_name or w.email }}
-        {% if can_manage_watchers and w.id != task.owner_id %}
-        <form method="POST"
-              action="{{ url_for('tasks.remove_watcher', task_uuid=task.uuid, user_id=w.id) }}"
-              hx-post="{{ url_for('tasks.remove_watcher', task_uuid=task.uuid, user_id=w.id) }}"
-              hx-target="#watchers-section"
-              hx-swap="innerHTML"
-              style="display: inline;">
-            <button type="submit" class="outline secondary small" title="Remove watcher">&times;</button>
-        </form>
-        {% endif %}
+        {% if w.id == task.owner_id %}<small>(owner)</small>{% endif %}
     </li>
     {% endfor %}
 </ul>
+{% else %}
+<p class="muted">No watchers yet.</p>
 {% endif %}
-
-{% if can_manage_watchers and available_users %}
-<form method="POST"
-      action="{{ url_for('tasks.add_watcher', task_uuid=task.uuid) }}"
-      hx-post="{{ url_for('tasks.add_watcher', task_uuid=task.uuid) }}"
-      hx-target="#watchers-section"
-      hx-swap="innerHTML"
-      class="add-watcher-form">
-    <select name="user_id" required>
-        <option value="">Add watcher...</option>
-        {% for u in available_users %}
-        <option value="{{ u.id }}">{{ u.display_name or u.email }}</option>
-        {% endfor %}
-    </select>
-    <button type="submit" class="outline small">Add</button>
-</form>
 {% endif %}

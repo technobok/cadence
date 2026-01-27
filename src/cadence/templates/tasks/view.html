@@ -2,6 +2,10 @@
 
 {% block title %}{{ task.title }} - Cadence{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/tom-select.min.css') }}">
+{% endblock %}
+
 {% block content %}
 <article>
     <header>
@@ -43,8 +47,8 @@
     {% endif %}
 
     {% if task.description %}
+    <p><strong>Description:</strong></p>
     <div class="task-description">
-        <h3>Description</h3>
         <div class="markdown-content">{{ task.description|markdown_block }}</div>
     </div>
     {% endif %}
@@ -241,4 +245,147 @@ function closeCommentDialog() {
     </article>
 </dialog>
 {% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/tom-select.min.js') }}"></script>
+<script>
+var watchersTomSelect = null;
+
+function initWatchersTomSelect() {
+    // Destroy existing instance if any
+    if (watchersTomSelect) {
+        watchersTomSelect.destroy();
+        watchersTomSelect = null;
+    }
+
+    var selectEl = document.getElementById('watchers-select');
+    var dataEl = document.getElementById('watchers-data');
+    if (!selectEl || !dataEl) return;
+
+    var config;
+    try {
+        config = JSON.parse(dataEl.textContent);
+    } catch (e) {
+        console.error('Failed to parse watchers data:', e);
+        return;
+    }
+
+    // Track if we're programmatically updating to avoid loops
+    var isUpdating = false;
+
+    watchersTomSelect = new TomSelect(selectEl, {
+        valueField: 'id',
+        labelField: 'text',
+        searchField: ['text', 'email'],
+        placeholder: 'Type to add...',
+        plugins: ['remove_button'],
+        items: config.watchers.map(function(w) { return w.id; }),
+        options: config.watchers,
+        loadThrottle: 200,
+        preload: 'focus',
+        closeAfterSelect: false,
+        load: function(query, callback) {
+            fetch(config.searchUrl + '?q=' + encodeURIComponent(query))
+                .then(function(response) { return response.json(); })
+                .then(function(json) { callback(json); })
+                .catch(function() { callback(); });
+        },
+        render: {
+            option: function(data, escape) {
+                return '<div class="ts-option-item">' +
+                    '<span class="user-name">' + escape(data.text) + '</span>' +
+                    (data.email && data.email !== data.text ? '<small class="user-email"> (' + escape(data.email) + ')</small>' : '') +
+                '</div>';
+            },
+            item: function(data, escape) {
+                var isOwner = data.id == config.ownerId;
+                var cls = isOwner ? 'ts-item-badge owner' : 'ts-item-badge';
+                return '<div class="' + cls + '" data-user-id="' + escape(data.id) + '">' +
+                    escape(data.text) +
+                '</div>';
+            }
+        },
+        onItemAdd: function(value, item) {
+            if (isUpdating) return;
+
+            // Clear input text but keep dropdown open
+            var self = this;
+            setTimeout(function() {
+                self.setTextboxValue('');
+                self.open();
+            }, 0);
+
+            // Add watcher via API
+            var formData = new FormData();
+            formData.append('user_id', value);
+
+            fetch(config.addUrl, {
+                method: 'POST',
+                body: formData,
+                headers: { 'HX-Request': 'true' }
+            }).then(function(response) {
+                if (!response.ok) {
+                    // Remove the item if add failed
+                    isUpdating = true;
+                    watchersTomSelect.removeItem(value, true);
+                    isUpdating = false;
+                }
+            });
+        },
+        onItemRemove: function(value) {
+            if (isUpdating) return;
+            // Don't allow removing the owner
+            if (value == config.ownerId) {
+                isUpdating = true;
+                var ownerData = config.watchers.find(function(w) { return w.id == config.ownerId; });
+                if (ownerData) {
+                    watchersTomSelect.addItem(value, true);
+                }
+                isUpdating = false;
+                return;
+            }
+            // Remove watcher via API
+            var removeUrl = config.removeUrlBase.replace('{id}', value);
+            fetch(removeUrl, {
+                method: 'POST',
+                headers: { 'HX-Request': 'true' }
+            });
+        },
+        onInitialize: function() {
+            // Lock owner item from being removed
+            var self = this;
+            setTimeout(function() {
+                var ownerItem = self.control.querySelector('[data-user-id="' + config.ownerId + '"]');
+                if (ownerItem) {
+                    var removeBtn = ownerItem.querySelector('.remove');
+                    if (removeBtn) removeBtn.style.display = 'none';
+                }
+            }, 10);
+        }
+    });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(initWatchersTomSelect, 50);
+});
+
+// Reinitialize after any HTMX swap that affects watchers
+document.body.addEventListener('htmx:afterSwap', function(event) {
+    var target = event.detail.target;
+    if (target.id === 'watchers-section' || target.querySelector('#watchers-select')) {
+        setTimeout(initWatchersTomSelect, 50);
+    }
+});
+
+// Also catch htmx:afterSettle for OOB swaps
+document.body.addEventListener('htmx:afterSettle', function(event) {
+    var select = document.getElementById('watchers-select');
+    if (select && !select.tomselect) {
+        setTimeout(initWatchersTomSelect, 50);
+    }
+});
+</script>
 {% endblock %}

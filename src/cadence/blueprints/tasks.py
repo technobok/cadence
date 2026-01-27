@@ -7,6 +7,7 @@ from flask import (
     current_app,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -89,8 +90,8 @@ def render_with_activity_oob(primary_template: str, task: Task, **context) -> st
     return primary_html + oob_html
 
 
-def render_watchers_section(task: Task) -> str:
-    """Render the watchers section for a task."""
+def get_watchers_context(task: Task) -> dict:
+    """Get watchers context data for a task."""
     watcher_count = TaskWatcher.count(task.id)
     watchers_data = TaskWatcher.get_watchers(task.id)
     watchers = [User.get_by_id(w.user_id) for w in watchers_data]
@@ -106,14 +107,18 @@ def render_watchers_section(task: Task) -> str:
         all_users = User.get_all()
         available_users = [u for u in all_users if u.id not in watcher_ids]
 
-    return render_template(
-        "tasks/_watchers.html",
-        task=task,
-        watcher_count=watcher_count,
-        watchers=watchers,
-        can_manage_watchers=can_manage_watchers,
-        available_users=available_users,
-    )
+    return {
+        "task": task,
+        "watcher_count": watcher_count,
+        "watchers": watchers,
+        "can_manage_watchers": can_manage_watchers,
+        "available_users": available_users,
+    }
+
+
+def render_watchers_section(task: Task) -> str:
+    """Render the watchers section for a task."""
+    return render_template("tasks/_watchers.html", **get_watchers_context(task))
 
 
 def render_activity_with_watchers_oob(task: Task) -> str:
@@ -817,3 +822,48 @@ def remove_watcher(task_uuid: str, user_id: int):
 
     flash("Watcher removed.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+@bp.route("/<task_uuid>/users/search")
+@login_required
+def search_users(task_uuid: str):
+    """Search users for adding as watchers (returns JSON for Tom Select)."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return jsonify([])
+
+    # Only owner or admin can manage watchers
+    if task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+        return jsonify([])
+
+    query = request.args.get("q", "").strip().lower()
+
+    # Get current watcher IDs to exclude
+    watcher_ids = set(TaskWatcher.get_watcher_user_ids(task.id))
+
+    # Get all active users and filter
+    all_users = User.get_all()
+    results = []
+    for user in all_users:
+        if user.id in watcher_ids:
+            continue
+        if not user.is_active:
+            continue
+        # Match against email or display name
+        name = (user.display_name or "").lower()
+        email = user.email.lower()
+        if query and query not in name and query not in email:
+            continue
+        results.append(
+            {
+                "id": user.id,
+                "text": user.display_name or user.email,
+                "email": user.email,
+            }
+        )
+        if len(results) >= 20:
+            break
+
+    return jsonify(results)
