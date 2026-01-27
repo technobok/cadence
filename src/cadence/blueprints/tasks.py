@@ -35,6 +35,20 @@ def get_base_url() -> str:
     return request.host_url.rstrip("/")
 
 
+def can_view_task(task: Task, user: User) -> bool:
+    """Check if a user can view a task."""
+    if not task.is_private:
+        return True
+    if task.owner_id == user.id:
+        return True
+    if user.is_admin:
+        return True
+    # Watchers can view private tasks
+    if TaskWatcher.is_watching(task.id, user.id):
+        return True
+    return False
+
+
 def render_partial_or_full(partial: str, full: str, **context):
     """Render partial template for HTMX, full page otherwise."""
     template = partial if is_htmx_request() else full
@@ -75,22 +89,37 @@ def render_with_activity_oob(primary_template: str, task: Task, **context) -> st
     return primary_html + oob_html
 
 
-def render_activity_with_watchers_oob(task: Task) -> str:
-    """Render activity section plus out-of-band watchers update for HTMX."""
-    activity_html = render_activity(task)
-
-    # Get watcher info for OOB update
+def render_watchers_section(task: Task) -> str:
+    """Render the watchers section for a task."""
     watcher_count = TaskWatcher.count(task.id)
     watchers_data = TaskWatcher.get_watchers(task.id)
     watchers = [User.get_by_id(w.user_id) for w in watchers_data]
     watchers = [w for w in watchers if w]
+    watcher_ids = {w.id for w in watchers}
 
-    watchers_html = render_template(
+    # Can manage watchers if owner or admin
+    can_manage_watchers = task.owner_id == g.user.id or g.user.is_admin
+
+    # Available users to add as watchers
+    available_users = []
+    if can_manage_watchers:
+        all_users = User.get_all()
+        available_users = [u for u in all_users if u.id not in watcher_ids]
+
+    return render_template(
         "tasks/_watchers.html",
         task=task,
         watcher_count=watcher_count,
         watchers=watchers,
+        can_manage_watchers=can_manage_watchers,
+        available_users=available_users,
     )
+
+
+def render_activity_with_watchers_oob(task: Task) -> str:
+    """Render activity section plus out-of-band watchers update for HTMX."""
+    activity_html = render_activity(task)
+    watchers_html = render_watchers_section(task)
 
     # Wrap watchers in OOB swap div
     oob_html = f'<div id="watchers-section" hx-swap-oob="innerHTML">{watchers_html}</div>'
@@ -212,8 +241,8 @@ def view(task_uuid: str):
         abort(404)
         return  # unreachable but helps type checker
 
-    # Check access for private tasks
-    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+    # Check access for private tasks (owner, admin, or watcher)
+    if not can_view_task(task, g.user):
         abort(403)
 
     owner = User.get_by_id(task.owner_id)
@@ -238,6 +267,16 @@ def view(task_uuid: str):
     watchers_data = TaskWatcher.get_watchers(task.id)
     watchers = [User.get_by_id(w.user_id) for w in watchers_data]
     watchers = [w for w in watchers if w]  # Filter out None
+    watcher_ids = {w.id for w in watchers}
+
+    # Can manage watchers if owner or admin
+    can_manage_watchers = task.owner_id == g.user.id or g.user.is_admin
+
+    # Available users to add as watchers (exclude current watchers)
+    available_users = []
+    if can_manage_watchers:
+        all_users = User.get_all()
+        available_users = [u for u in all_users if u.id not in watcher_ids]
 
     return render_template(
         "tasks/view.html",
@@ -253,6 +292,8 @@ def view(task_uuid: str):
         is_watching=is_watching,
         watcher_count=watcher_count,
         watchers=watchers,
+        can_manage_watchers=can_manage_watchers,
+        available_users=available_users,
     )
 
 
@@ -397,7 +438,7 @@ def add_comment(task_uuid: str):
         return
 
     # Check access for private tasks
-    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+    if not can_view_task(task, g.user):
         abort(403)
 
     content = request.form.get("content", "").strip()
@@ -529,7 +570,7 @@ def upload_attachment(task_uuid: str):
         return
 
     # Check access for private tasks
-    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+    if not can_view_task(task, g.user):
         abort(403)
 
     if "file" not in request.files:
@@ -595,7 +636,7 @@ def download_attachment(task_uuid: str, attachment_uuid: str):
         return
 
     # Check access for private tasks
-    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+    if not can_view_task(task, g.user):
         abort(403)
 
     attachment = Attachment.get_by_uuid(attachment_uuid)
@@ -661,21 +702,6 @@ def delete_attachment(task_uuid: str, attachment_uuid: str):
 # --- Watching ---
 
 
-def render_watchers(task: Task) -> str:
-    """Render the watchers section for a task."""
-    watcher_count = TaskWatcher.count(task.id)
-    watchers_data = TaskWatcher.get_watchers(task.id)
-    watchers = [User.get_by_id(w.user_id) for w in watchers_data]
-    watchers = [w for w in watchers if w]  # Filter out None
-
-    return render_template(
-        "tasks/_watchers.html",
-        task=task,
-        watcher_count=watcher_count,
-        watchers=watchers,
-    )
-
-
 @bp.route("/<task_uuid>/watch", methods=["POST"])
 @login_required
 def watch(task_uuid: str):
@@ -686,30 +712,18 @@ def watch(task_uuid: str):
         return
 
     # Check access for private tasks
-    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+    if not can_view_task(task, g.user):
         abort(403)
 
     TaskWatcher.add(task.id, g.user.id)
 
     if is_htmx_request():
-        is_watching = True
-        watcher_count = TaskWatcher.count(task.id)
-        watchers_data = TaskWatcher.get_watchers(task.id)
-        watchers = [User.get_by_id(w.user_id) for w in watchers_data]
-        watchers = [w for w in watchers if w]
-
-        # Return updated watch button + watchers section with OOB
         button_html = render_template(
             "tasks/_watch_button.html",
             task=task,
-            is_watching=is_watching,
+            is_watching=True,
         )
-        watchers_html = render_template(
-            "tasks/_watchers.html",
-            task=task,
-            watcher_count=watcher_count,
-            watchers=watchers,
-        )
+        watchers_html = render_watchers_section(task)
         oob_html = f'<div id="watchers-section" hx-swap-oob="innerHTML">{watchers_html}</div>'
         return button_html + oob_html
 
@@ -727,32 +741,79 @@ def unwatch(task_uuid: str):
         return
 
     # Check access for private tasks
-    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+    if not can_view_task(task, g.user):
         abort(403)
 
     TaskWatcher.remove(task.id, g.user.id)
 
     if is_htmx_request():
-        is_watching = False
-        watcher_count = TaskWatcher.count(task.id)
-        watchers_data = TaskWatcher.get_watchers(task.id)
-        watchers = [User.get_by_id(w.user_id) for w in watchers_data]
-        watchers = [w for w in watchers if w]
-
-        # Return updated watch button + watchers section with OOB
         button_html = render_template(
             "tasks/_watch_button.html",
             task=task,
-            is_watching=is_watching,
+            is_watching=False,
         )
-        watchers_html = render_template(
-            "tasks/_watchers.html",
-            task=task,
-            watcher_count=watcher_count,
-            watchers=watchers,
-        )
+        watchers_html = render_watchers_section(task)
         oob_html = f'<div id="watchers-section" hx-swap-oob="innerHTML">{watchers_html}</div>'
         return button_html + oob_html
 
     flash("You are no longer watching this task.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+@bp.route("/<task_uuid>/watchers", methods=["POST"])
+@login_required
+def add_watcher(task_uuid: str):
+    """Add a user as a watcher (owner/admin only)."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Only owner or admin can manage watchers
+    if task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    user_id = request.form.get("user_id", type=int)
+    if not user_id:
+        flash("No user selected.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    user = User.get_by_id(user_id)
+    if not user:
+        flash("User not found.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    TaskWatcher.add(task.id, user_id)
+
+    if is_htmx_request():
+        return render_watchers_section(task)
+
+    flash(f"{user.display_name or user.email} is now watching this task.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+@bp.route("/<task_uuid>/watchers/<int:user_id>/remove", methods=["POST"])
+@login_required
+def remove_watcher(task_uuid: str, user_id: int):
+    """Remove a user from watchers (owner/admin only)."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Only owner or admin can manage watchers
+    if task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    # Can't remove the owner
+    if user_id == task.owner_id:
+        flash("Cannot remove the task owner from watchers.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    TaskWatcher.remove(task.id, user_id)
+
+    if is_htmx_request():
+        return render_watchers_section(task)
+
+    flash("Watcher removed.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))
