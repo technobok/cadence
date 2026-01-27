@@ -49,8 +49,8 @@ Self-hosted task/issue tracker built with Python, Flask, HTMX, and SQLite (via A
 - [x] Attachment model with hash-based deduplication
 - [x] File upload handling
 - [x] File download endpoint
-- [ ] Unified timeline view (merge comments/attachments into activity section)
-- [ ] Simplified markdown in task descriptions and comments
+- [x] Unified timeline view (merge comments/attachments into activity section)
+- [x] Simplified markdown in task descriptions and comments
 
 ### Phase 5: Watching & Notifications
 - [ ] Task watchers (add/remove)
@@ -134,8 +134,8 @@ These are specified in the original requirements but deferred to future phases:
 - [x] Duplicate files are deduplicated
 - [x] Download returns correct file with original filename
 - [x] Comments can be added to tasks
-- [ ] Unified timeline view works
-- [ ] Markdown renders in descriptions and comments
+- [x] Unified timeline view works
+- [x] Markdown renders in descriptions and comments
 
 ### Phase 5
 - [ ] `make worker` starts background worker
