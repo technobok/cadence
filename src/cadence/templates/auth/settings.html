@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h1>Settings</h1>
+    </header>
+
+    <section>
+        <h3>Profile</h3>
+        <form method="post">
+            <input type="hidden" name="action" value="update_profile">
+            <label for="display_name">
+                Display Name
+                <input type="text" id="display_name" name="display_name"
+                       value="{{ g.user.display_name or '' }}" required>
+            </label>
+            <label>
+                Email
+                <input type="email" value="{{ g.user.email }}" disabled>
+                <small>Email cannot be changed</small>
+            </label>
+            <button type="submit">Save Profile</button>
+        </form>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Email Notifications</h3>
+        <p>Receive email notifications when tasks you watch are updated.</p>
+        <form method="post">
+            <input type="hidden" name="action" value="toggle_email">
+            {% if g.user.email_notifications %}
+            <p><strong>Status:</strong> Enabled</p>
+            <button type="submit" class="outline secondary">Disable Email Notifications</button>
+            {% else %}
+            <p><strong>Status:</strong> Disabled</p>
+            <button type="submit">Enable Email Notifications</button>
+            {% endif %}
+        </form>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Push Notifications</h3>
+        <p>Get instant push notifications on your phone or desktop using <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a>.</p>
+
+        {% if g.user.ntfy_topic %}
+        <div class="notification-enabled">
+            <p><strong>Status:</strong> Enabled</p>
+            <p><strong>Your topic:</strong> <code>{{ g.user.ntfy_topic }}</code></p>
+            <p><strong>Subscribe URL:</strong></p>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 16px;">
+                <input type="text" value="{{ ntfy_subscribe_url }}" readonly id="ntfy-url"
+                       style="flex: 1; font-family: monospace;">
+                <button type="button" class="outline" onclick="copyNtfyUrl()">Copy</button>
+            </div>
+            <details>
+                <summary>How to subscribe</summary>
+                <ol>
+                    <li>Install the ntfy app on your <a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener">Android</a> or <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener">iOS</a> device</li>
+                    <li>Open the app and tap "+" to add a subscription</li>
+                    <li>Enter your topic: <code>{{ g.user.ntfy_topic }}</code></li>
+                    <li>{% if 'ntfy.sh' not in ntfy_server %}Set the server to: <code>{{ ntfy_server }}</code>{% else %}Use the default server (ntfy.sh){% endif %}</li>
+                    <li>You'll now receive push notifications for task updates</li>
+                </ol>
+            </details>
+            <form method="post" style="margin-top: 16px;">
+                <input type="hidden" name="action" value="disable_ntfy">
+                <button type="submit" class="outline secondary">Disable Push Notifications</button>
+            </form>
+        </div>
+        {% else %}
+        <p>Push notifications are currently disabled.</p>
+        <form method="post">
+            <input type="hidden" name="action" value="enable_ntfy">
+            <button type="submit">Enable Push Notifications</button>
+        </form>
+        {% endif %}
+    </section>
+</article>
+
+<script>
+function copyNtfyUrl() {
+    var input = document.getElementById('ntfy-url');
+    input.select();
+    document.execCommand('copy');
+    input.setSelectionRange(0, 0);
+    alert('Copied to clipboard!');
+}
+</script>
+{% endblock %}

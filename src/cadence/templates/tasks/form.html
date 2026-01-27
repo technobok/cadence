@@ -29,6 +29,13 @@
             Private (only visible to you)
         </label>
 
+        {% if task %}
+        <label>
+            <input type="checkbox" id="skip_notification" name="skip_notification" value="1">
+            Skip notification (don't notify watchers of this change)
+        </label>
+        {% endif %}
+
         <footer class="form-actions">
             <button type="button" class="outline secondary" onclick="location.href='{{ url_for('tasks.view', task_uuid=task.uuid) if task else url_for('tasks.index') }}'">Cancel</button>
             <button type="submit">{{ 'Save Changes' if task else 'Create Task' }}</button>

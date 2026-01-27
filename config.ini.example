@@ -7,6 +7,8 @@ PORT = 5000
 # Development settings (make rundev)
 DEV_HOST = 127.0.0.1
 DEV_PORT = 5000
+# Base URL for notification links (optional, defaults to request host)
+# APP_URL = https://cadence.example.com
 
 [database]
 PATH = instance/cadence.sqlite3
@@ -48,3 +50,9 @@ EDIT_WINDOW_SECONDS = 300
 #X_FORWARDED_PROTO = 1
 #X_FORWARDED_HOST = 1
 #X_FORWARDED_PREFIX = 0
+
+[worker]
+# Notification worker settings
+POLL_INTERVAL = 5
+BATCH_SIZE = 50
+MAX_RETRIES = 3

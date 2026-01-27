@@ -14,9 +14,9 @@ from flask import (
 )
 
 from cadence.blueprints.auth import login_required
-from cadence.models import VALID_STATUSES, Activity, Attachment, Comment, Task, User
+from cadence.models import VALID_STATUSES, Activity, Attachment, Comment, Task, TaskWatcher, User
 from cadence.models.task import STATUS_TRANSITIONS
-from cadence.services import attachment_service
+from cadence.services import attachment_service, notification_service
 
 bp = Blueprint("tasks", __name__, url_prefix="/tasks")
 
@@ -24,6 +24,15 @@ bp = Blueprint("tasks", __name__, url_prefix="/tasks")
 def is_htmx_request() -> bool:
     """Check if this is an HTMX request."""
     return request.headers.get("HX-Request") == "true"
+
+
+def get_base_url() -> str:
+    """Get the base URL for notification links."""
+    # Use configured APP_URL if available, otherwise construct from request
+    app_url = current_app.config.get("APP_URL")
+    if app_url:
+        return app_url
+    return request.host_url.rstrip("/")
 
 
 def render_partial_or_full(partial: str, full: str, **context):
@@ -64,6 +73,29 @@ def render_with_activity_oob(primary_template: str, task: Task, **context) -> st
     oob_html = f'<div id="activity-section" hx-swap-oob="innerHTML">{activity_html}</div>'
 
     return primary_html + oob_html
+
+
+def render_activity_with_watchers_oob(task: Task) -> str:
+    """Render activity section plus out-of-band watchers update for HTMX."""
+    activity_html = render_activity(task)
+
+    # Get watcher info for OOB update
+    watcher_count = TaskWatcher.count(task.id)
+    watchers_data = TaskWatcher.get_watchers(task.id)
+    watchers = [User.get_by_id(w.user_id) for w in watchers_data]
+    watchers = [w for w in watchers if w]
+
+    watchers_html = render_template(
+        "tasks/_watchers.html",
+        task=task,
+        watcher_count=watcher_count,
+        watchers=watchers,
+    )
+
+    # Wrap watchers in OOB swap div
+    oob_html = f'<div id="watchers-section" hx-swap-oob="innerHTML">{watchers_html}</div>'
+
+    return activity_html + oob_html
 
 
 @bp.route("/")
@@ -147,13 +179,19 @@ def create():
             is_private=is_private,
         )
 
+        # Auto-watch the owner
+        TaskWatcher.add(task.id, g.user.id)
+
         # Log activity
-        Activity.log(
+        activity = Activity.log(
             task_id=task.id,
             action="created",
             user_id=g.user.id,
             details={"title": title},
         )
+
+        # Queue notifications
+        notification_service.queue_notifications(activity, task, get_base_url())
 
         flash("Task created.", "success")
 
@@ -194,6 +232,13 @@ def view(task_uuid: str):
 
     edit_window_seconds = current_app.config.get("COMMENT_EDIT_WINDOW_SECONDS", 300)
 
+    # Get watcher info
+    is_watching = TaskWatcher.is_watching(task.id, g.user.id)
+    watcher_count = TaskWatcher.count(task.id)
+    watchers_data = TaskWatcher.get_watchers(task.id)
+    watchers = [User.get_by_id(w.user_id) for w in watchers_data]
+    watchers = [w for w in watchers if w]  # Filter out None
+
     return render_template(
         "tasks/view.html",
         task=task,
@@ -205,6 +250,9 @@ def view(task_uuid: str):
         valid_statuses=VALID_STATUSES,
         format_file_size=attachment_service.format_file_size,
         edit_window_seconds=edit_window_seconds,
+        is_watching=is_watching,
+        watcher_count=watcher_count,
+        watchers=watchers,
     )
 
 
@@ -226,6 +274,7 @@ def edit(task_uuid: str):
         description = request.form.get("description", "").strip()
         due_date = request.form.get("due_date", "").strip()
         is_private = request.form.get("is_private") == "1"
+        skip_notification = request.form.get("skip_notification") == "1"
 
         errors = []
         if not title:
@@ -251,12 +300,15 @@ def edit(task_uuid: str):
         )
 
         if changes:
-            Activity.log(
+            activity = Activity.log(
                 task_id=task.id,
                 action="updated",
                 user_id=g.user.id,
                 details={"changes": [{"field": c[0], "old": c[1], "new": c[2]} for c in changes]},
+                skip_notification=skip_notification,
             )
+            # Queue notifications
+            notification_service.queue_notifications(activity, task, get_base_url())
             flash("Task updated.", "success")
 
         return redirect(url_for("tasks.view", task_uuid=task.uuid))
@@ -291,12 +343,14 @@ def change_status(task_uuid: str):
     else:
         old_status = task.status
         if task.set_status(new_status):
-            Activity.log(
+            activity = Activity.log(
                 task_id=task.id,
                 action="status_changed",
                 user_id=g.user.id,
                 details={"old": old_status, "new": new_status},
             )
+            # Queue notifications
+            notification_service.queue_notifications(activity, task, get_base_url())
             flash(f"Status changed to {new_status}.", "success")
 
     if is_htmx_request():
@@ -353,15 +407,21 @@ def add_comment(task_uuid: str):
 
     comment = Comment.create(task_id=task.id, user_id=g.user.id, content=content)
 
-    Activity.log(
+    # Auto-watch the commenter
+    TaskWatcher.add(task.id, g.user.id)
+
+    activity = Activity.log(
         task_id=task.id,
         action="commented",
         user_id=g.user.id,
         details={"comment_uuid": comment.uuid, "content": content},
     )
 
+    # Queue notifications
+    notification_service.queue_notifications(activity, task, get_base_url())
+
     if is_htmx_request():
-        return render_activity(task)
+        return render_activity_with_watchers_oob(task)
 
     flash("Comment added.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))
@@ -434,6 +494,15 @@ def edit_comment(task_uuid: str, comment_uuid: str):
     # Update activity log with new content
     Activity.update_comment_content(comment_uuid, content)
 
+    # Log the edit and queue notifications
+    activity = Activity.log(
+        task_id=task.id,
+        action="comment_edited",
+        user_id=g.user.id,
+        details={"comment_uuid": comment.uuid, "content": content},
+    )
+    notification_service.queue_notifications(activity, task, get_base_url())
+
     if is_htmx_request():
         return render_activity(task)
 
@@ -482,8 +551,11 @@ def upload_attachment(task_uuid: str):
         uploaded_by=g.user.id,
     )
 
+    # Auto-watch the uploader
+    TaskWatcher.add(task.id, g.user.id)
+
     blob = attachment.get_blob()
-    Activity.log(
+    activity = Activity.log(
         task_id=task.id,
         action="attachment_added",
         user_id=g.user.id,
@@ -494,8 +566,11 @@ def upload_attachment(task_uuid: str):
         },
     )
 
+    # Queue notifications
+    notification_service.queue_notifications(activity, task, get_base_url())
+
     if is_htmx_request():
-        return render_activity(task)
+        return render_activity_with_watchers_oob(task)
 
     flash("File uploaded.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))
@@ -571,4 +646,104 @@ def delete_attachment(task_uuid: str, attachment_uuid: str):
         return render_activity(task)
 
     flash("Attachment deleted.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+# --- Watching ---
+
+
+def render_watchers(task: Task) -> str:
+    """Render the watchers section for a task."""
+    watcher_count = TaskWatcher.count(task.id)
+    watchers_data = TaskWatcher.get_watchers(task.id)
+    watchers = [User.get_by_id(w.user_id) for w in watchers_data]
+    watchers = [w for w in watchers if w]  # Filter out None
+
+    return render_template(
+        "tasks/_watchers.html",
+        task=task,
+        watcher_count=watcher_count,
+        watchers=watchers,
+    )
+
+
+@bp.route("/<task_uuid>/watch", methods=["POST"])
+@login_required
+def watch(task_uuid: str):
+    """Start watching a task."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Check access for private tasks
+    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    TaskWatcher.add(task.id, g.user.id)
+
+    if is_htmx_request():
+        is_watching = True
+        watcher_count = TaskWatcher.count(task.id)
+        watchers_data = TaskWatcher.get_watchers(task.id)
+        watchers = [User.get_by_id(w.user_id) for w in watchers_data]
+        watchers = [w for w in watchers if w]
+
+        # Return updated watch button + watchers section with OOB
+        button_html = render_template(
+            "tasks/_watch_button.html",
+            task=task,
+            is_watching=is_watching,
+        )
+        watchers_html = render_template(
+            "tasks/_watchers.html",
+            task=task,
+            watcher_count=watcher_count,
+            watchers=watchers,
+        )
+        oob_html = f'<div id="watchers-section" hx-swap-oob="innerHTML">{watchers_html}</div>'
+        return button_html + oob_html
+
+    flash("You are now watching this task.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+@bp.route("/<task_uuid>/unwatch", methods=["POST"])
+@login_required
+def unwatch(task_uuid: str):
+    """Stop watching a task."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Check access for private tasks
+    if task.is_private and task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    TaskWatcher.remove(task.id, g.user.id)
+
+    if is_htmx_request():
+        is_watching = False
+        watcher_count = TaskWatcher.count(task.id)
+        watchers_data = TaskWatcher.get_watchers(task.id)
+        watchers = [User.get_by_id(w.user_id) for w in watchers_data]
+        watchers = [w for w in watchers if w]
+
+        # Return updated watch button + watchers section with OOB
+        button_html = render_template(
+            "tasks/_watch_button.html",
+            task=task,
+            is_watching=is_watching,
+        )
+        watchers_html = render_template(
+            "tasks/_watchers.html",
+            task=task,
+            watcher_count=watcher_count,
+            watchers=watchers,
+        )
+        oob_html = f'<div id="watchers-section" hx-swap-oob="innerHTML">{watchers_html}</div>'
+        return button_html + oob_html
+
+    flash("You are no longer watching this task.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))

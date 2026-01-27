@@ -1,0 +1,19 @@
+{% if is_watching %}
+<form method="POST"
+      action="{{ url_for('tasks.unwatch', task_uuid=task.uuid) }}"
+      hx-post="{{ url_for('tasks.unwatch', task_uuid=task.uuid) }}"
+      hx-target="#watch-button"
+      hx-swap="innerHTML"
+      style="display: inline;">
+    <button type="submit" class="outline secondary">Unwatch</button>
+</form>
+{% else %}
+<form method="POST"
+      action="{{ url_for('tasks.watch', task_uuid=task.uuid) }}"
+      hx-post="{{ url_for('tasks.watch', task_uuid=task.uuid) }}"
+      hx-target="#watch-button"
+      hx-swap="innerHTML"
+      style="display: inline;">
+    <button type="submit" class="outline">Watch</button>
+</form>
+{% endif %}

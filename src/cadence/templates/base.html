@@ -24,7 +24,7 @@
                 <li><a href="{{ url_for('tasks.index') }}">Tasks</a></li>
                 {% endif %}
                 {% if g.user %}
-                <li>{{ g.user.display_name or g.user.email }}</li>
+                <li><a href="{{ url_for('auth.settings') }}">{{ g.user.display_name or g.user.email }}</a></li>
                 <li><button type="button" class="outline secondary" onclick="location.href='{{ url_for('auth.logout') }}'">Logout</button></li>
                 {% else %}
                 <li><a href="{{ url_for('auth.login') }}" role="button" class="outline">Login</a></li>

@@ -310,3 +310,53 @@ def logout():
 
     flash("You have been logged out.", "info")
     return response
+
+
+@bp.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    """User settings page."""
+    ntfy_server = current_app.config.get("NTFY_SERVER", "https://ntfy.sh")
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        if action == "update_profile":
+            display_name = request.form.get("display_name", "").strip()
+            if display_name:
+                g.user.update(display_name=display_name)
+                flash("Profile updated.", "success")
+            else:
+                flash("Display name cannot be empty.", "error")
+
+        elif action == "toggle_email":
+            new_value = not g.user.email_notifications
+            g.user.update(email_notifications=new_value)
+            if new_value:
+                flash("Email notifications enabled.", "success")
+            else:
+                flash("Email notifications disabled.", "success")
+
+        elif action == "enable_ntfy":
+            # Generate a random topic (not based on user UUID for security)
+            topic = f"cadence-{secrets.token_urlsafe(16)}"
+            g.user.update(ntfy_topic=topic)
+            flash("Push notifications enabled.", "success")
+
+        elif action == "disable_ntfy":
+            # Empty string is falsy and will disable notifications
+            g.user.update(ntfy_topic="")
+            flash("Push notifications disabled.", "success")
+
+        return redirect(url_for("auth.settings"))
+
+    # Build subscription URL for display
+    ntfy_subscribe_url = None
+    if g.user.ntfy_topic:
+        ntfy_subscribe_url = f"{ntfy_server.rstrip('/')}/{g.user.ntfy_topic}"
+
+    return render_template(
+        "auth/settings.html",
+        ntfy_server=ntfy_server,
+        ntfy_subscribe_url=ntfy_subscribe_url,
+    )

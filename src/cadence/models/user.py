@@ -6,6 +6,12 @@ from datetime import UTC, datetime
 
 from cadence.db import get_db, transaction
 
+# Column list for SELECT queries
+_USER_COLUMNS = (
+    "id, uuid, email, display_name, is_active, is_admin, "
+    "email_notifications, ntfy_topic, created_at, updated_at"
+)
+
 
 @dataclass
 class User:
@@ -15,6 +21,7 @@ class User:
     display_name: str | None
     is_active: bool
     is_admin: bool
+    email_notifications: bool
     ntfy_topic: str | None
     created_at: str
     updated_at: str
@@ -25,8 +32,7 @@ class User:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, email, display_name, is_active, is_admin, "
-            "ntfy_topic, created_at, updated_at FROM user WHERE id = ?",
+            f"SELECT {_USER_COLUMNS} FROM user WHERE id = ?",
             (user_id,),
         )
         row = cursor.fetchone()
@@ -40,8 +46,7 @@ class User:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, email, display_name, is_active, is_admin, "
-            "ntfy_topic, created_at, updated_at FROM user WHERE uuid = ?",
+            f"SELECT {_USER_COLUMNS} FROM user WHERE uuid = ?",
             (user_uuid,),
         )
         row = cursor.fetchone()
@@ -55,8 +60,7 @@ class User:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, email, display_name, is_active, is_admin, "
-            "ntfy_topic, created_at, updated_at FROM user WHERE email = ?",
+            f"SELECT {_USER_COLUMNS} FROM user WHERE email = ?",
             (email.lower(),),
         )
         row = cursor.fetchone()
@@ -73,7 +77,7 @@ class User:
         with transaction() as cursor:
             cursor.execute(
                 "INSERT INTO user (uuid, email, display_name, is_active, is_admin, "
-                "created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?)",
+                "email_notifications, created_at, updated_at) VALUES (?, ?, ?, 1, ?, 1, ?, ?)",
                 (user_uuid, email.lower(), display_name, int(is_admin), now, now),
             )
             row = cursor.execute("SELECT last_insert_rowid()").fetchone()
@@ -86,6 +90,7 @@ class User:
             display_name=display_name,
             is_active=True,
             is_admin=is_admin,
+            email_notifications=True,
             ntfy_topic=None,
             created_at=now,
             updated_at=now,
@@ -102,6 +107,7 @@ class User:
     def update(
         self,
         display_name: str | None = None,
+        email_notifications: bool | None = None,
         ntfy_topic: str | None = None,
         is_active: bool | None = None,
         is_admin: bool | None = None,
@@ -116,6 +122,11 @@ class User:
             updates.append("display_name = ?")
             params.append(display_name)
             self.display_name = display_name
+
+        if email_notifications is not None:
+            updates.append("email_notifications = ?")
+            params.append(int(email_notifications))
+            self.email_notifications = email_notifications
 
         if ntfy_topic is not None:
             updates.append("ntfy_topic = ?")
@@ -151,16 +162,9 @@ class User:
         cursor = db.cursor()
 
         if include_inactive:
-            cursor.execute(
-                "SELECT id, uuid, email, display_name, is_active, is_admin, "
-                "ntfy_topic, created_at, updated_at FROM user ORDER BY email"
-            )
+            cursor.execute(f"SELECT {_USER_COLUMNS} FROM user ORDER BY email")
         else:
-            cursor.execute(
-                "SELECT id, uuid, email, display_name, is_active, is_admin, "
-                "ntfy_topic, created_at, updated_at FROM user "
-                "WHERE is_active = 1 ORDER BY email"
-            )
+            cursor.execute(f"SELECT {_USER_COLUMNS} FROM user WHERE is_active = 1 ORDER BY email")
 
         return [User(*row) for row in cursor.fetchall()]  # type: ignore[arg-type]
 

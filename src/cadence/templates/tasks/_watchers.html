@@ -1,0 +1,13 @@
+<p>
+    <strong>Watchers:</strong>
+    {% if watcher_count == 0 %}
+    <span class="muted">None</span>
+    {% else %}
+    <span>{{ watcher_count }} {% if watcher_count == 1 %}person{% else %}people{% endif %}</span>
+    {% if watchers %}
+    <small class="watcher-list">
+        ({% for w in watchers %}{{ w.display_name or w.email }}{% if not loop.last %}, {% endif %}{% endfor %})
+    </small>
+    {% endif %}
+    {% endif %}
+</p>

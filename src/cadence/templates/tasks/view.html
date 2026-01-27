@@ -24,6 +24,7 @@
         {% endif %}
         <button type="button" class="outline" onclick="openCommentDialog()">Comment</button>
         <button type="button" class="outline" onclick="document.getElementById('upload-dialog').showModal()">Upload</button>
+        <span id="watch-button">{% include "tasks/_watch_button.html" %}</span>
         {% if task.owner_id == g.user.id or g.user.is_admin %}
         <button type="button" class="outline contrast" onclick="document.getElementById('delete-dialog').showModal()">Delete...</button>
         {% endif %}
@@ -31,6 +32,10 @@
 
     <div id="task-status">
         {% include "tasks/_status.html" %}
+    </div>
+
+    <div id="watchers-section">
+        {% include "tasks/_watchers.html" %}
     </div>
 
     {% if task.due_date %}

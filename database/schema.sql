@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS user (
     display_name TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
     is_admin INTEGER NOT NULL DEFAULT 0,
+    email_notifications INTEGER NOT NULL DEFAULT 1,
     ntfy_topic TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -154,6 +155,7 @@ CREATE TABLE IF NOT EXISTS notification_queue (
     channel TEXT NOT NULL,
     subject TEXT NOT NULL,
     body TEXT NOT NULL,
+    body_html TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
     retries INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
