@@ -1,24 +1,6 @@
-<div class="status-section">
-    <p>
-        <strong>Status:</strong>
-        <span class="status-badge status-{{ task.status|replace('_', '-') }}">
-            {{ task.status|replace('_', ' ')|title }}
-        </span>
-    </p>
-    {% if (task.owner_id == g.user.id or g.user.is_admin) and allowed_transitions %}
-    <form method="POST" action="{{ url_for('tasks.change_status', task_uuid=task.uuid) }}"
-          hx-post="{{ url_for('tasks.change_status', task_uuid=task.uuid) }}"
-          hx-target="#task-status"
-          hx-swap="innerHTML">
-        <fieldset role="group">
-            <select name="status" required>
-                <option value="">Change status to...</option>
-                {% for status in allowed_transitions %}
-                <option value="{{ status }}">{{ status|replace('_', ' ')|title }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit">Update</button>
-        </fieldset>
-    </form>
-    {% endif %}
-</div>
+<p>
+    <strong>Status:</strong>
+    <span class="status-badge status-{{ task.status|replace('_', '-') }}">
+        {{ task.status|replace('_', ' ')|title }}
+    </span>
+</p>

@@ -13,15 +13,21 @@
                 {% if task.is_private %}<small>(private)</small>{% endif %}
             </p>
         </hgroup>
-        {% if task.owner_id == g.user.id or g.user.is_admin %}
-        <div class="task-actions">
-            <button type="button" class="outline" onclick="location.href='{{ url_for('tasks.edit', task_uuid=task.uuid) }}'">Edit</button>
-            <form method="POST" action="{{ url_for('tasks.delete', task_uuid=task.uuid) }}" style="display: inline;">
-                <button type="submit" class="outline contrast" onclick="return confirm('Delete this task?')">Delete...</button>
-            </form>
-        </div>
-        {% endif %}
     </header>
+
+    <nav class="task-toolbar">
+        {% if task.owner_id == g.user.id or g.user.is_admin %}
+        <button type="button" class="outline" onclick="location.href='{{ url_for('tasks.edit', task_uuid=task.uuid) }}'">Edit</button>
+        {% endif %}
+        {% if (task.owner_id == g.user.id or g.user.is_admin) and allowed_transitions %}
+        <button type="button" class="outline" onclick="document.getElementById('status-dialog').showModal()">Status</button>
+        {% endif %}
+        <button type="button" class="outline" onclick="document.getElementById('comment-dialog').showModal()">Comment</button>
+        <button type="button" class="outline" onclick="document.getElementById('upload-dialog').showModal()">Upload</button>
+        {% if task.owner_id == g.user.id or g.user.is_admin %}
+        <button type="button" class="outline contrast" onclick="document.getElementById('delete-dialog').showModal()">Delete...</button>
+        {% endif %}
+    </nav>
 
     <div id="task-status">
         {% include "tasks/_status.html" %}
@@ -51,4 +57,106 @@
         {% include "tasks/_activity.html" %}
     </div>
 </article>
+
+<!-- Status Dialog -->
+{% if (task.owner_id == g.user.id or g.user.is_admin) and allowed_transitions %}
+<dialog id="status-dialog">
+    <article>
+        <header>
+            <button type="button" aria-label="Close" rel="prev" onclick="document.getElementById('status-dialog').close()"></button>
+            <h3>Change Status</h3>
+        </header>
+        <form method="POST"
+              action="{{ url_for('tasks.change_status', task_uuid=task.uuid) }}"
+              hx-post="{{ url_for('tasks.change_status', task_uuid=task.uuid) }}"
+              hx-target="#task-status"
+              hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) document.getElementById('status-dialog').close()">
+            <label for="dialog-status">
+                New Status
+                <select id="dialog-status" name="status" required autofocus>
+                    <option value="">Select status...</option>
+                    {% for status in allowed_transitions %}
+                    <option value="{{ status }}">{{ status|replace('_', ' ')|title }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <footer class="form-actions">
+                <button type="submit">Update Status</button>
+                <button type="button" class="outline" onclick="document.getElementById('status-dialog').close()">Cancel</button>
+            </footer>
+        </form>
+    </article>
+</dialog>
+{% endif %}
+
+<!-- Comment Dialog -->
+<dialog id="comment-dialog">
+    <article>
+        <header>
+            <button type="button" aria-label="Close" rel="prev" onclick="document.getElementById('comment-dialog').close()"></button>
+            <h3>Add Comment</h3>
+        </header>
+        <form method="POST"
+              action="{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}"
+              hx-post="{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}"
+              hx-target="#activity-section"
+              hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) document.getElementById('comment-dialog').close()">
+            <label for="dialog-content">
+                Comment
+                <textarea id="dialog-content" name="content" rows="4" required autofocus></textarea>
+            </label>
+            <footer class="form-actions">
+                <button type="submit">Post Comment</button>
+                <button type="button" class="outline" onclick="document.getElementById('comment-dialog').close()">Cancel</button>
+            </footer>
+        </form>
+    </article>
+</dialog>
+
+<!-- Upload Dialog -->
+<dialog id="upload-dialog">
+    <article>
+        <header>
+            <button type="button" aria-label="Close" rel="prev" onclick="document.getElementById('upload-dialog').close()"></button>
+            <h3>Upload File</h3>
+        </header>
+        <form method="POST"
+              action="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
+              hx-post="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
+              hx-target="#activity-section"
+              hx-swap="innerHTML"
+              hx-encoding="multipart/form-data"
+              hx-on::after-request="if(event.detail.successful) document.getElementById('upload-dialog').close()">
+            <label for="dialog-file">
+                File
+                <input type="file" id="dialog-file" name="file" required>
+            </label>
+            <footer class="form-actions">
+                <button type="submit">Upload</button>
+                <button type="button" class="outline" onclick="document.getElementById('upload-dialog').close()">Cancel</button>
+            </footer>
+        </form>
+    </article>
+</dialog>
+
+<!-- Delete Dialog -->
+{% if task.owner_id == g.user.id or g.user.is_admin %}
+<dialog id="delete-dialog">
+    <article>
+        <header>
+            <button type="button" aria-label="Close" rel="prev" onclick="document.getElementById('delete-dialog').close()"></button>
+            <h3>Delete Task</h3>
+        </header>
+        <p>Are you sure you want to delete this task? This action cannot be undone.</p>
+        <form method="POST" action="{{ url_for('tasks.delete', task_uuid=task.uuid) }}">
+            <footer class="form-actions">
+                <button type="submit" class="contrast">Delete Task</button>
+                <button type="button" class="outline" onclick="document.getElementById('delete-dialog').close()">Cancel</button>
+            </footer>
+        </form>
+    </article>
+</dialog>
+{% endif %}
 {% endblock %}

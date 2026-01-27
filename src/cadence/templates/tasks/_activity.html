@@ -68,34 +68,5 @@
     {% endfor %}
 </ul>
 {% else %}
-<p>No activity yet.</p>
+<p class="no-activity">No activity yet.</p>
 {% endif %}
-
-<div class="timeline-forms">
-    <form method="POST"
-          action="{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}"
-          hx-post="{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}"
-          hx-target="#activity-section"
-          hx-swap="innerHTML"
-          class="comment-form">
-        <label for="content">
-            Add a comment
-            <textarea id="content" name="content" rows="3" required></textarea>
-        </label>
-        <button type="submit">Post Comment</button>
-    </form>
-
-    <form method="POST"
-          action="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
-          hx-post="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
-          hx-target="#activity-section"
-          hx-swap="innerHTML"
-          hx-encoding="multipart/form-data"
-          class="attachment-form">
-        <label for="file">
-            Upload a file
-            <input type="file" id="file" name="file" required>
-        </label>
-        <button type="submit">Upload</button>
-    </form>
-</div>
