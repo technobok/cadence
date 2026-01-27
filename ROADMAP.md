@@ -61,11 +61,11 @@ Self-hosted task/issue tracker built with Python, Flask, HTMX, and SQLite (via A
 - [x] "Skip notification" checkbox for edits, comments, uploads
 - [x] User settings page (email/push notification preferences)
 
-### Phase 6: Admin & Polish
-- [ ] Admin role decorator
-- [ ] User management UI
-- [ ] Database backup endpoint
-- [ ] Activity reports (date range filter)
+### Phase 6: Admin & Polish ✓
+- [x] Admin role decorator
+- [x] User management UI
+- [x] Database backup endpoint
+- [x] Activity reports (date range filter)
 
 ### Phase 7: Deployment
 - [ ] Dockerfile
@@ -145,10 +145,10 @@ These are specified in the original requirements but deferred to future phases:
 - [x] Ntfy notifications send (when user has topic configured)
 - [x] Skip notification option on edits, comments, uploads
 
-### Phase 6
-- [ ] Admin can manage users
-- [ ] Database backup works
-- [ ] Activity reports filter by date
+### Phase 6 ✓
+- [x] Admin can manage users
+- [x] Database backup works
+- [x] Activity reports filter by date
 
 ### Phase 7
 - [ ] `docker compose up` starts all services

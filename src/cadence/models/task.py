@@ -117,6 +117,7 @@ class Task:
         description: str | None = None,
         due_date: str | None = None,
         is_private: bool | None = None,
+        owner_id: int | None = None,
     ) -> list[tuple[str, str, str]]:
         """
         Update task fields. Returns list of changes as (field, old_value, new_value).
@@ -150,6 +151,11 @@ class Task:
             updates.append("is_private = ?")
             params.append(int(is_private))
             self.is_private = is_private
+
+        if owner_id is not None and owner_id != self.owner_id:
+            updates.append("owner_id = ?")
+            params.append(owner_id)
+            self.owner_id = owner_id
 
         if updates:
             updates.append("updated_at = ?")

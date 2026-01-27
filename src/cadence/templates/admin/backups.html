@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Backups - Admin - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h1>Database Backups</h1>
+    </header>
+
+    <form method="POST" action="{{ url_for('admin.backup') }}" style="margin-bottom: 1.5rem;">
+        <button type="submit">Create New Backup</button>
+    </form>
+
+    {% if backups %}
+    <table>
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Size</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for backup in backups %}
+            <tr>
+                <td>{{ backup.name }}</td>
+                <td>{{ (backup.size / 1024 / 1024)|round(2) }} MB</td>
+                <td>{{ backup.created.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="backup-actions">
+                    <a href="{{ url_for('admin.download_backup', filename=backup.name) }}"
+                       role="button" class="outline small">Download</a>
+                    <form method="POST"
+                          action="{{ url_for('admin.delete_backup', filename=backup.name) }}"
+                          onsubmit="return confirm('Delete this backup?');">
+                        <button type="submit" class="outline secondary small">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No backups found. Create one using the button above.</p>
+    {% endif %}
+
+    <footer>
+        <a href="{{ url_for('admin.index') }}">&larr; Back to Admin</a>
+    </footer>
+</article>
+{% endblock %}

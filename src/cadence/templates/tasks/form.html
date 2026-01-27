@@ -2,6 +2,12 @@
 
 {% block title %}{{ 'Edit Task' if task else 'New Task' }} - Cadence{% endblock %}
 
+{% if task and g.user.is_admin and all_users %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/tom-select.min.css') }}">
+{% endblock %}
+{% endif %}
+
 {% block content %}
 <article>
     <header>
@@ -24,6 +30,23 @@
             <input type="date" id="due_date" name="due_date" value="{{ due_date or '' }}">
         </label>
 
+        {% if task and g.user.is_admin and all_users %}
+        <label for="owner_id">
+            Owner
+            <select id="owner_id" name="owner_id" placeholder="Search users..."></select>
+        </label>
+        <script type="application/json" id="owner-data">
+        {
+            "currentOwnerId": {{ task.owner_id }},
+            "users": [
+                {% for user in all_users %}{% if not loop.first %},{% endif %}
+                {"id": {{ user.id }}, "text": "{{ (user.display_name or user.email)|e }}", "email": "{{ user.email|e }}"}
+                {% endfor %}
+            ]
+        }
+        </script>
+        {% endif %}
+
         <label>
             <input type="checkbox" id="is_private" name="is_private" value="1" {{ 'checked' if is_private else '' }}>
             Private (only visible to you)
@@ -43,3 +66,46 @@
     </form>
 </article>
 {% endblock %}
+
+{% if task and g.user.is_admin and all_users %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/tom-select.min.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var dataEl = document.getElementById('owner-data');
+    if (!dataEl) return;
+
+    var config;
+    try {
+        config = JSON.parse(dataEl.textContent);
+    } catch (e) {
+        console.error('Failed to parse owner data:', e);
+        return;
+    }
+
+    var selectEl = document.getElementById('owner_id');
+    if (!selectEl) return;
+
+    new TomSelect(selectEl, {
+        valueField: 'id',
+        labelField: 'text',
+        searchField: ['text', 'email'],
+        maxItems: 1,
+        options: config.users,
+        items: [config.currentOwnerId],
+        render: {
+            option: function(data, escape) {
+                return '<div class="ts-option-item">' +
+                    '<span class="user-name">' + escape(data.text) + '</span>' +
+                    (data.email && data.email !== data.text ? '<small class="user-email"> (' + escape(data.email) + ')</small>' : '') +
+                '</div>';
+            },
+            item: function(data, escape) {
+                return '<div>' + escape(data.text) + '</div>';
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
+{% endif %}

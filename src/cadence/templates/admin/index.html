@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h1>Admin Dashboard</h1>
+    </header>
+
+    <div class="admin-stats">
+        <p><strong>Users:</strong> {{ user_count }}</p>
+        <p><strong>Tasks:</strong> {{ task_count }}</p>
+        <p><strong>Activity (24h):</strong> {{ recent_activity_count }} events</p>
+    </div>
+
+    <nav class="admin-nav">
+        <a href="{{ url_for('admin.users') }}" role="button" class="outline">Manage Users</a>
+        <a href="{{ url_for('admin.reports') }}" role="button" class="outline">Activity Reports</a>
+        <a href="{{ url_for('admin.backups') }}" role="button" class="outline">Backups</a>
+    </nav>
+</article>
+{% endblock %}

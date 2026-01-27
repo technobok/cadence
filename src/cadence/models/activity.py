@@ -104,12 +104,32 @@ class Activity:
         return [Activity._from_row(row) for row in cursor.fetchall()]
 
     @staticmethod
-    def get_recent(limit: int = 50, user_id: int | None = None) -> list[Activity]:
+    def get_recent(
+        limit: int = 50, user_id: int | None = None, hours: int | None = None
+    ) -> list[Activity]:
         """Get recent activity across all tasks."""
+        from datetime import timedelta
+
         db = get_db()
         cursor = db.cursor()
 
-        if user_id:
+        if hours:
+            since = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+            if user_id:
+                cursor.execute(
+                    "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
+                    "skip_notification FROM activity_log WHERE user_id = ? "
+                    "AND logged_at >= ? ORDER BY logged_at DESC LIMIT ?",
+                    (user_id, since, limit),
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
+                    "skip_notification FROM activity_log WHERE logged_at >= ? "
+                    "ORDER BY logged_at DESC LIMIT ?",
+                    (since, limit),
+                )
+        elif user_id:
             cursor.execute(
                 "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
                 "skip_notification FROM activity_log WHERE user_id = ? "
@@ -122,6 +142,26 @@ class Activity:
                 "skip_notification FROM activity_log ORDER BY logged_at DESC LIMIT ?",
                 (limit,),
             )
+
+        return [Activity._from_row(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def get_in_date_range(start_date: str, end_date: str, limit: int = 1000) -> list[Activity]:
+        """Get activity within a date range (inclusive)."""
+        db = get_db()
+        cursor = db.cursor()
+
+        # Add time component to make end_date inclusive
+        start = f"{start_date}T00:00:00"
+        end = f"{end_date}T23:59:59"
+
+        cursor.execute(
+            "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
+            "skip_notification FROM activity_log "
+            "WHERE logged_at >= ? AND logged_at <= ? "
+            "ORDER BY logged_at DESC LIMIT ?",
+            (start, end, limit),
+        )
 
         return [Activity._from_row(row) for row in cursor.fetchall()]
 

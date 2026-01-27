@@ -1,0 +1,90 @@
+<section class="report-summary">
+    <h3>Summary</h3>
+    <p><strong>Period:</strong> {{ start_date }} to {{ end_date }}</p>
+    <p><strong>Total Activities:</strong> {{ total_activities }}</p>
+</section>
+
+{% if action_counts %}
+<section class="report-actions">
+    <h3>Activity by Type</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Action</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for action, count in action_counts %}
+            <tr>
+                <td>{{ action|replace('_', ' ')|title }}</td>
+                <td>{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if user_activity %}
+<section class="report-users">
+    <h3>Most Active Users</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Activities</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user, count in user_activity %}
+            <tr>
+                <td>{{ user.display_name or user.email if user else 'Unknown' }}</td>
+                <td>{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if activities %}
+<section class="report-detail">
+    <h3>Activity Log</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Task</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for activity in activities[:100] %}
+            <tr>
+                <td>{{ activity.logged_at|localdate }}</td>
+                <td>
+                    {% set user = users.get(activity.user_id) %}
+                    {{ user.display_name or user.email if user else '-' }}
+                </td>
+                <td>{{ activity.action|replace('_', ' ')|title }}</td>
+                <td>
+                    {% set task = tasks.get(activity.task_id) %}
+                    {% if task %}
+                    <a href="{{ url_for('tasks.view', task_uuid=task.uuid) }}">{{ task.title|truncate(40) }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if activities|length > 100 %}
+    <p class="muted"><small>Showing first 100 of {{ activities|length }} activities.</small></p>
+    {% endif %}
+</section>
+{% else %}
+<p class="muted">No activity found in this date range.</p>
+{% endif %}

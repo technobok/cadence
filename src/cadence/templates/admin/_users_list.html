@@ -1,0 +1,30 @@
+{% macro sort_link(field, label) %}
+{% set new_dir = 'desc' if sort_by == field and sort_dir == 'asc' else 'asc' %}
+<a href="{{ url_for('admin.users', sort=field, dir=new_dir) }}"
+   hx-get="{{ url_for('admin.users', sort=field, dir=new_dir) }}"
+   hx-target="#users-list"
+   hx-swap="innerHTML">
+    {{ label }}
+    {% if sort_by == field %}
+    {{ '▲' if sort_dir == 'asc' else '▼' }}
+    {% endif %}
+</a>
+{% endmacro %}
+
+<table>
+    <thead>
+        <tr>
+            <th>{{ sort_link('email', 'Email') }}</th>
+            <th>{{ sort_link('name', 'Display Name') }}</th>
+            <th>{{ sort_link('admin', 'Admin') }}</th>
+            <th>{{ sort_link('active', 'Active') }}</th>
+            <th>{{ sort_link('created', 'Created') }}</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        {% include "admin/_user_row.html" %}
+        {% endfor %}
+    </tbody>
+</table>

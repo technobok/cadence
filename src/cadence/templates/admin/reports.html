@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Activity Reports - Admin - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h1>Activity Reports</h1>
+    </header>
+
+    <form method="GET" action="{{ url_for('admin.reports') }}"
+          hx-get="{{ url_for('admin.reports') }}"
+          hx-target="#reports-content"
+          hx-swap="innerHTML"
+          class="report-filters">
+        <fieldset role="group">
+            <label>
+                Start Date
+                <input type="date" name="start_date" value="{{ start_date }}">
+            </label>
+            <label>
+                End Date
+                <input type="date" name="end_date" value="{{ end_date }}">
+            </label>
+            <button type="submit">Filter</button>
+        </fieldset>
+    </form>
+
+    <div id="reports-content">
+        {% include "admin/_reports.html" %}
+    </div>
+
+    <footer>
+        <a href="{{ url_for('admin.index') }}">&larr; Back to Admin</a>
+    </footer>
+</article>
+{% endblock %}

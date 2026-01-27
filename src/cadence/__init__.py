@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import click
 import mistune
 from flask import Flask, render_template, request
 from markupsafe import Markup
@@ -212,13 +213,48 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return Markup(str(md(text)))
 
     # Register blueprints
-    from cadence.blueprints import auth, tasks
+    from cadence.blueprints import admin, auth, tasks
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(tasks.bp)
+    app.register_blueprint(admin.bp)
 
     @app.route("/")
     def index():
         return render_template("index.html")
+
+    # CLI commands
+    @app.cli.command("make-admin")
+    @click.argument("email")
+    def make_admin_command(email: str):
+        """Grant admin privileges to a user by email."""
+        from cadence.models import User
+
+        user = User.get_by_email(email)
+        if not user:
+            # Create the user if they don't exist
+            user = User.create(email=email, is_admin=True)
+            click.echo(f"Created admin user: {email}")
+        elif user.is_admin:
+            click.echo(f"User {email} is already an admin.")
+        else:
+            user.update(is_admin=True)
+            click.echo(f"Granted admin privileges to: {email}")
+
+    @app.cli.command("list-users")
+    def list_users_command():
+        """List all users."""
+        from cadence.models import User
+
+        users = User.get_all(include_inactive=True)
+        if not users:
+            click.echo("No users found.")
+            return
+        click.echo(f"{'Email':<40} {'Admin':<8} {'Active':<8}")
+        click.echo("-" * 56)
+        for user in users:
+            admin = "Yes" if user.is_admin else "No"
+            active = "Yes" if user.is_active else "No"
+            click.echo(f"{user.email:<40} {admin:<8} {active:<8}")
 
     return app

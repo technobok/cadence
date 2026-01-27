@@ -1,0 +1,43 @@
+<tr id="user-row-{{ user.id }}">
+    <td>{{ user.email }}</td>
+    <td>{{ user.display_name or '-' }}</td>
+    <td>
+        {% if user.is_admin %}
+        <span class="status-badge status-complete">Yes</span>
+        {% else %}
+        <span class="status-badge status-on-hold">No</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if user.is_active %}
+        <span class="status-badge status-complete">Active</span>
+        {% else %}
+        <span class="status-badge status-on-hold">Inactive</span>
+        {% endif %}
+    </td>
+    <td>{{ user.created_at|localdate }}</td>
+    <td class="user-actions">
+        {% if user.id != g.user.id %}
+        <form method="POST"
+              action="{{ url_for('admin.toggle_admin', user_id=user.id) }}"
+              hx-post="{{ url_for('admin.toggle_admin', user_id=user.id) }}"
+              hx-target="#user-row-{{ user.id }}"
+              hx-swap="outerHTML">
+            <button type="submit" class="outline small">
+                {{ 'Revoke Admin' if user.is_admin else 'Grant Admin' }}
+            </button>
+        </form>
+        <form method="POST"
+              action="{{ url_for('admin.toggle_active', user_id=user.id) }}"
+              hx-post="{{ url_for('admin.toggle_active', user_id=user.id) }}"
+              hx-target="#user-row-{{ user.id }}"
+              hx-swap="outerHTML">
+            <button type="submit" class="outline small {{ 'contrast' if user.is_active else '' }}">
+                {{ 'Deactivate' if user.is_active else 'Activate' }}
+            </button>
+        </form>
+        {% else %}
+        <small class="muted">(current user)</small>
+        {% endif %}
+    </td>
+</tr>

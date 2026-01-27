@@ -145,20 +145,26 @@ def index():
     status_arg = status_filter if status_filter in VALID_STATUSES else None
     owner_id_arg = g.user.id if owner_filter == "me" else None
 
+    # Admins can see all tasks including private ones
+    include_private = g.user.is_admin
+
     tasks = Task.get_all(
         status=status_arg,
         owner_id=owner_id_arg,
         current_user_id=g.user.id,
+        include_private=include_private,
         limit=per_page,
         offset=(page - 1) * per_page,
     )
 
     # Get counts for filter badges
-    total_count = Task.count(current_user_id=g.user.id)
+    total_count = Task.count(current_user_id=g.user.id, include_private=include_private)
 
     status_counts = {}
     for status in VALID_STATUSES:
-        status_counts[status] = Task.count(status=status, current_user_id=g.user.id)
+        status_counts[status] = Task.count(
+            status=status, current_user_id=g.user.id, include_private=include_private
+        )
 
     # Get task owners for display
     owner_ids = {t.owner_id for t in tasks}
@@ -315,12 +321,22 @@ def edit(task_uuid: str):
     if task.owner_id != g.user.id and not g.user.is_admin:
         abort(403)
 
+    # Get all users for owner select (admin only)
+    all_users = User.get_all() if g.user.is_admin else []
+
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         description = request.form.get("description", "").strip()
         due_date = request.form.get("due_date", "").strip()
         is_private = request.form.get("is_private") == "1"
         skip_notification = request.form.get("skip_notification") == "1"
+
+        # Admin can change owner
+        new_owner_id = None
+        if g.user.is_admin:
+            owner_id_str = request.form.get("owner_id", "").strip()
+            if owner_id_str:
+                new_owner_id = int(owner_id_str)
 
         errors = []
         if not title:
@@ -336,6 +352,7 @@ def edit(task_uuid: str):
                 description=description,
                 due_date=due_date,
                 is_private=is_private,
+                all_users=all_users,
             )
 
         changes = task.update(
@@ -344,6 +361,18 @@ def edit(task_uuid: str):
             due_date=due_date or None,
             is_private=is_private,
         )
+
+        # Handle owner change separately (admin only)
+        if new_owner_id and new_owner_id != task.owner_id and g.user.is_admin:
+            old_owner = User.get_by_id(task.owner_id)
+            new_owner = User.get_by_id(new_owner_id)
+            if new_owner:
+                task.update(owner_id=new_owner_id)
+                changes.append(
+                    ("owner", old_owner.email if old_owner else str(task.owner_id), new_owner.email)
+                )
+                # Auto-watch new owner
+                TaskWatcher.add(task.id, new_owner_id)
 
         if changes:
             activity = Activity.log(
@@ -366,6 +395,7 @@ def edit(task_uuid: str):
         description=task.description or "",
         due_date=task.due_date or "",
         is_private=task.is_private,
+        all_users=all_users,
     )
 
 
@@ -420,8 +450,8 @@ def delete(task_uuid: str):
         abort(404)
         return  # unreachable but helps type checker
 
-    # Only owner or admin can delete
-    if task.owner_id != g.user.id and not g.user.is_admin:
+    # Only admin can delete tasks
+    if not g.user.is_admin:
         abort(403)
 
     task.delete()
@@ -490,8 +520,8 @@ def delete_comment(task_uuid: str, comment_uuid: str):
         abort(404)
         return
 
-    # Only comment author, task owner, or admin can delete
-    if comment.user_id != g.user.id and task.owner_id != g.user.id and not g.user.is_admin:
+    # Only admin can delete comments
+    if not g.user.is_admin:
         abort(403)
 
     comment.delete()
@@ -512,7 +542,7 @@ def delete_comment(task_uuid: str, comment_uuid: str):
 @bp.route("/<task_uuid>/comments/<comment_uuid>/edit", methods=["POST"])
 @login_required
 def edit_comment(task_uuid: str, comment_uuid: str):
-    """Edit a comment (within edit window)."""
+    """Edit a comment (admin can always edit, author within edit window)."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
@@ -523,15 +553,16 @@ def edit_comment(task_uuid: str, comment_uuid: str):
         abort(404)
         return
 
-    # Only comment author can edit
-    if comment.user_id != g.user.id:
-        abort(403)
+    # Admin can always edit; author can edit within window
+    if not g.user.is_admin:
+        if comment.user_id != g.user.id:
+            abort(403)
 
-    # Check edit window
-    edit_window_seconds = current_app.config.get("COMMENT_EDIT_WINDOW_SECONDS", 300)
-    if not comment.is_editable(edit_window_seconds):
-        flash("Edit window has expired.", "error")
-        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+        # Check edit window for non-admin
+        edit_window_seconds = current_app.config.get("COMMENT_EDIT_WINDOW_SECONDS", 300)
+        if not comment.is_editable(edit_window_seconds):
+            flash("Edit window has expired.", "error")
+            return redirect(url_for("tasks.view", task_uuid=task_uuid))
 
     content = request.form.get("content", "").strip()
     skip_notification = request.form.get("skip_notification") == "1"
@@ -683,8 +714,8 @@ def delete_attachment(task_uuid: str, attachment_uuid: str):
         abort(404)
         return
 
-    # Only uploader, task owner, or admin can delete
-    if attachment.uploaded_by != g.user.id and task.owner_id != g.user.id and not g.user.is_admin:
+    # Only admin can delete attachments
+    if not g.user.is_admin:
         abort(403)
 
     filename = attachment.original_filename

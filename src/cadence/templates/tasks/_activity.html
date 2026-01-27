@@ -10,19 +10,20 @@
 
         {% if activity.action == 'commented' and activity.details and activity.details.content %}
         {% set comment = comments_by_uuid.get(activity.details.comment_uuid) if activity.details.comment_uuid else none %}
-        {% set can_edit = comment and comment.user_id == g.user.id and comment.is_editable(edit_window_seconds) %}
-        {% set edit_expires_in = comment.seconds_until_edit_expires(edit_window_seconds) if can_edit else 0 %}
+        {% set can_edit_as_author = comment and comment.user_id == g.user.id and comment.is_editable(edit_window_seconds) %}
+        {% set can_edit = g.user.is_admin or can_edit_as_author %}
+        {% set edit_expires_in = comment.seconds_until_edit_expires(edit_window_seconds) if can_edit_as_author else 9999 %}
         <div class="activity-content">
             <div class="comment-content markdown-content">{{ activity.details.content|markdown_block }}</div>
             <div class="comment-actions">
-                {% if can_edit %}
+                {% if can_edit and activity.details.comment_uuid %}
                 <button type="button" class="outline secondary activity-edit"
                         data-edit-url="{{ url_for('tasks.edit_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
                         data-content="{{ activity.details.content|e }}"
                         data-expires="{{ edit_expires_in }}"
                         onclick="openCommentDialog(this.dataset.editUrl, this.dataset.content, parseInt(this.dataset.expires))">Edit</button>
                 {% endif %}
-                {% if activity.details.comment_uuid and (activity.user_id == g.user.id or task.owner_id == g.user.id or g.user.is_admin) %}
+                {% if activity.details.comment_uuid and g.user.is_admin %}
                 <form method="POST"
                       action="{{ url_for('tasks.delete_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
                       hx-post="{{ url_for('tasks.delete_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
@@ -44,7 +45,7 @@
             {% if activity.details.file_size %}
             <small class="attachment-meta">({{ format_file_size(activity.details.file_size) }})</small>
             {% endif %}
-            {% if activity.user_id == g.user.id or task.owner_id == g.user.id or g.user.is_admin %}
+            {% if g.user.is_admin %}
             <form method="POST"
                   action="{{ url_for('tasks.delete_attachment', task_uuid=task.uuid, attachment_uuid=activity.details.attachment_uuid) }}"
                   hx-post="{{ url_for('tasks.delete_attachment', task_uuid=task.uuid, attachment_uuid=activity.details.attachment_uuid) }}"

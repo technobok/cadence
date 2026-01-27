@@ -29,7 +29,7 @@
         <button type="button" class="outline" onclick="openCommentDialog()">Comment</button>
         <button type="button" class="outline" onclick="document.getElementById('upload-dialog').showModal()">Upload</button>
         <span id="watch-button">{% include "tasks/_watch_button.html" %}</span>
-        {% if task.owner_id == g.user.id or g.user.is_admin %}
+        {% if g.user.is_admin %}
         <button type="button" class="outline contrast" onclick="document.getElementById('delete-dialog').showModal()">Delete...</button>
         {% endif %}
     </nav>
@@ -228,7 +228,7 @@ function closeCommentDialog() {
 </dialog>
 
 <!-- Delete Dialog -->
-{% if task.owner_id == g.user.id or g.user.is_admin %}
+{% if g.user.is_admin %}
 <dialog id="delete-dialog">
     <article>
         <header>

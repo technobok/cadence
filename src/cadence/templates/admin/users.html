@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - Admin - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <hgroup>
+            <h1>User Management</h1>
+            <p>{{ users|length }} users total</p>
+        </hgroup>
+    </header>
+
+    <div id="users-list">
+        {% include "admin/_users_list.html" %}
+    </div>
+
+    <footer>
+        <a href="{{ url_for('admin.index') }}">&larr; Back to Admin</a>
+    </footer>
+</article>
+{% endblock %}
