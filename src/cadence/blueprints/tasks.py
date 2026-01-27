@@ -401,6 +401,8 @@ def add_comment(task_uuid: str):
         abort(403)
 
     content = request.form.get("content", "").strip()
+    skip_notification = request.form.get("skip_notification") == "1"
+
     if not content:
         flash("Comment cannot be empty.", "error")
         return redirect(url_for("tasks.view", task_uuid=task_uuid))
@@ -415,6 +417,7 @@ def add_comment(task_uuid: str):
         action="commented",
         user_id=g.user.id,
         details={"comment_uuid": comment.uuid, "content": content},
+        skip_notification=skip_notification,
     )
 
     # Queue notifications
@@ -485,6 +488,8 @@ def edit_comment(task_uuid: str, comment_uuid: str):
         return redirect(url_for("tasks.view", task_uuid=task_uuid))
 
     content = request.form.get("content", "").strip()
+    skip_notification = request.form.get("skip_notification") == "1"
+
     if not content:
         flash("Comment cannot be empty.", "error")
         return redirect(url_for("tasks.view", task_uuid=task_uuid))
@@ -500,6 +505,7 @@ def edit_comment(task_uuid: str, comment_uuid: str):
         action="comment_edited",
         user_id=g.user.id,
         details={"comment_uuid": comment.uuid, "content": content},
+        skip_notification=skip_notification,
     )
     notification_service.queue_notifications(activity, task, get_base_url())
 
@@ -545,6 +551,8 @@ def upload_attachment(task_uuid: str):
         flash(f"File too large. Maximum size is {max_size // (1024 * 1024)}MB.", "error")
         return redirect(url_for("tasks.view", task_uuid=task_uuid))
 
+    skip_notification = request.form.get("skip_notification") == "1"
+
     attachment = attachment_service.save_uploaded_file(
         file=file,
         task_id=task.id,
@@ -564,6 +572,7 @@ def upload_attachment(task_uuid: str):
             "filename": attachment.original_filename,
             "file_size": blob.file_size if blob else 0,
         },
+        skip_notification=skip_notification,
     )
 
     # Queue notifications

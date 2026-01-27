@@ -126,6 +126,10 @@
                     <li><code>> quote</code> → blockquote</li>
                 </ul>
             </details>
+            <label id="comment-skip-notification-label">
+                <input type="checkbox" id="comment-skip-notification" name="skip_notification" value="1">
+                Don't notify watchers
+            </label>
             <footer class="form-actions">
                 <button type="submit" id="comment-submit-btn">Post Comment</button>
                 <button type="button" class="outline" onclick="closeCommentDialog()">Cancel</button>
@@ -206,6 +210,10 @@ function closeCommentDialog() {
             <label for="dialog-file">
                 File
                 <input type="file" id="dialog-file" name="file" required>
+            </label>
+            <label>
+                <input type="checkbox" name="skip_notification" value="1">
+                Don't notify watchers
             </label>
             <footer class="form-actions">
                 <button type="submit">Upload</button>

@@ -52,13 +52,14 @@ Self-hosted task/issue tracker built with Python, Flask, HTMX, and SQLite (via A
 - [x] Unified timeline view (merge comments/attachments into activity section)
 - [x] Simplified markdown in task descriptions and comments
 
-### Phase 5: Watching & Notifications
-- [ ] Task watchers (add/remove)
-- [ ] Notification queue table
-- [ ] Background notification worker (polling, no Celery)
-- [ ] Email notifications
-- [ ] Ntfy notifications
-- [ ] "Skip notification" checkbox for minor edits
+### Phase 5: Watching & Notifications ✓
+- [x] Task watchers (add/remove)
+- [x] Notification queue table
+- [x] Background notification worker (polling, no Celery)
+- [x] Email notifications (HTML with rendered markdown)
+- [x] Ntfy notifications (opt-in via settings)
+- [x] "Skip notification" checkbox for edits, comments, uploads
+- [x] User settings page (email/push notification preferences)
 
 ### Phase 6: Admin & Polish
 - [ ] Admin role decorator
@@ -137,11 +138,12 @@ These are specified in the original requirements but deferred to future phases:
 - [x] Unified timeline view works
 - [x] Markdown renders in descriptions and comments
 
-### Phase 5
-- [ ] `make worker` starts background worker
-- [ ] Task changes queue notifications
-- [ ] Email notifications send
-- [ ] Ntfy notifications send
+### Phase 5 ✓
+- [x] `make worker` starts background worker
+- [x] Task changes queue notifications
+- [x] Email notifications send (HTML with markdown)
+- [x] Ntfy notifications send (when user has topic configured)
+- [x] Skip notification option on edits, comments, uploads
 
 ### Phase 6
 - [ ] Admin can manage users
