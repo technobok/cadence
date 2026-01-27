@@ -302,3 +302,94 @@ dialog article header {
 dialog article footer {
     margin-top: 1rem;
 }
+
+/* Markdown content */
+.markdown-content {
+    line-height: 1.5;
+}
+
+.markdown-content p {
+    margin: 0 0 0.5rem 0;
+}
+
+.markdown-content p:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-content code {
+    background: var(--pico-code-background-color);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.markdown-content pre {
+    background: var(--pico-code-background-color);
+    padding: 0.75rem 1rem;
+    border-radius: var(--pico-border-radius);
+    overflow-x: auto;
+    margin: 0.5rem 0;
+}
+
+.markdown-content pre code {
+    background: none;
+    padding: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.markdown-content blockquote {
+    border-left: 3px solid var(--pico-muted-border-color);
+    margin: 0.5rem 0;
+    padding-left: 1rem;
+    color: var(--pico-muted-color);
+}
+
+/* Markdown help in comment dialog */
+.markdown-help {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.markdown-help[hidden] {
+    display: none;
+}
+
+.markdown-help summary {
+    cursor: pointer;
+    color: var(--pico-muted-color);
+    margin-bottom: 0.5rem;
+}
+
+.markdown-help ul {
+    margin: 0;
+    padding-left: 1rem;
+    list-style: none;
+}
+
+.markdown-help li {
+    margin: 0.25rem 0;
+}
+
+.markdown-help code {
+    background: var(--pico-code-background-color);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+/* Comment actions */
+.comment-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.activity-edit {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
+}

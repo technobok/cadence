@@ -26,6 +26,7 @@ SERVER = https://ntfy.sh
 MAX_SIZE_MB = 10
 
 [blobs]
+# location of 'blobs' (the body of uploaded files)
 DIRECTORY = instance/blobs
 
 [backups]
@@ -34,6 +35,10 @@ DIRECTORY = instance/backups
 [auth]
 MAGIC_LINK_EXPIRY_SECONDS = 3600
 TRUSTED_SESSION_DAYS = 365
+
+[comments]
+# Time window (in seconds) during which users can edit their own comments
+EDIT_WINDOW_SECONDS = 300
 
 # Enable when running behind a reverse proxy (Caddy, nginx, etc.)
 # Values indicate number of proxies to trust for each header

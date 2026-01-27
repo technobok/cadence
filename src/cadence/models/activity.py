@@ -124,3 +124,29 @@ class Activity:
             )
 
         return [Activity._from_row(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def update_comment_content(comment_uuid: str, new_content: str) -> bool:
+        """Update the content in activity details for a comment."""
+        db = get_db()
+        cursor = db.cursor()
+        # Find activity with this comment_uuid in details
+        cursor.execute(
+            "SELECT id, details FROM activity_log WHERE action = 'commented' "
+            "AND json_extract(details, '$.comment_uuid') = ?",
+            (comment_uuid,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return False
+
+        activity_id = int(row[0])
+        details = json.loads(str(row[1])) if row[1] else {}
+        details["content"] = new_content
+
+        with transaction() as tx_cursor:
+            tx_cursor.execute(
+                "UPDATE activity_log SET details = ? WHERE id = ?",
+                (json.dumps(details), activity_id),
+            )
+        return True

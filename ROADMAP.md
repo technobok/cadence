@@ -76,6 +76,7 @@ Self-hosted task/issue tracker built with Python, Flask, HTMX, and SQLite (via A
 
 ## Deferred Features
 These are specified in the original requirements but deferred to future phases:
+- Full text search
 - Groups (users can only belong to groups, no nested groups)
 - Subtasks / task hierarchy
 - Custom task types and workflows
@@ -113,7 +114,7 @@ These are specified in the original requirements but deferred to future phases:
 ### Phase 1 ✓
 - [x] `make sync` installs dependencies
 - [x] `make init-db` creates database with all tables
-- [x] `make run` starts server on 0.0.0.0:5000
+- [x] `make run` starts production server, `make rundev` starts dev server
 - [x] `make check` passes (ruff + ty)
 
 ### Phase 2 ✓
@@ -141,6 +142,11 @@ These are specified in the original requirements but deferred to future phases:
 - [ ] Task changes queue notifications
 - [ ] Email notifications send
 - [ ] Ntfy notifications send
+
+### Phase 6
+- [ ] Admin can manage users
+- [ ] Database backup works
+- [ ] Activity reports filter by date
 
 ### Phase 7
 - [ ] `docker compose up` starts all services

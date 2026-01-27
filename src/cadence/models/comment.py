@@ -111,3 +111,39 @@ class Comment:
         """Delete the comment."""
         with transaction() as cursor:
             cursor.execute("DELETE FROM comment WHERE id = ?", (self.id,))
+
+    def update(self, content: str) -> None:
+        """Update the comment content."""
+        now = datetime.now(UTC).isoformat()
+        with transaction() as cursor:
+            cursor.execute(
+                "UPDATE comment SET content = ?, updated_at = ? WHERE id = ?",
+                (content, now, self.id),
+            )
+        self.content = content
+        self.updated_at = now
+
+    def is_editable(self, edit_window_seconds: int = 300) -> bool:
+        """Check if comment is within the edit window."""
+        try:
+            updated = datetime.fromisoformat(self.updated_at.replace("Z", "+00:00"))
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=UTC)
+            now = datetime.now(UTC)
+            elapsed = (now - updated).total_seconds()
+            return elapsed < edit_window_seconds
+        except Exception:
+            return False
+
+    def seconds_until_edit_expires(self, edit_window_seconds: int = 300) -> int:
+        """Get seconds remaining in edit window, or 0 if expired."""
+        try:
+            updated = datetime.fromisoformat(self.updated_at.replace("Z", "+00:00"))
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=UTC)
+            now = datetime.now(UTC)
+            elapsed = (now - updated).total_seconds()
+            remaining = edit_window_seconds - elapsed
+            return max(0, int(remaining))
+        except Exception:
+            return 0

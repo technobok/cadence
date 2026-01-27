@@ -38,12 +38,20 @@ def render_activity(task: Task) -> str:
     activity_user_ids = {a.user_id for a in activities if a.user_id}
     users = {u.id: u for u in [User.get_by_id(uid) for uid in activity_user_ids] if u}
 
+    # Get comments for edit checking
+    comments = Comment.get_for_task(task.id)
+    comments_by_uuid = {c.uuid: c for c in comments}
+
+    edit_window_seconds = current_app.config.get("COMMENT_EDIT_WINDOW_SECONDS", 300)
+
     return render_template(
         "tasks/_activity.html",
         task=task,
         activities=activities,
         users=users,
+        comments_by_uuid=comments_by_uuid,
         format_file_size=attachment_service.format_file_size,
+        edit_window_seconds=edit_window_seconds,
     )
 
 
@@ -177,8 +185,14 @@ def view(task_uuid: str):
     activity_user_ids = {a.user_id for a in activities if a.user_id}
     users = {u.id: u for u in [User.get_by_id(uid) for uid in activity_user_ids] if u}
 
+    # Get comments for edit checking
+    comments = Comment.get_for_task(task.id)
+    comments_by_uuid = {c.uuid: c for c in comments}
+
     # Get allowed status transitions
     allowed_transitions = STATUS_TRANSITIONS.get(task.status, [])
+
+    edit_window_seconds = current_app.config.get("COMMENT_EDIT_WINDOW_SECONDS", 300)
 
     return render_template(
         "tasks/view.html",
@@ -186,9 +200,11 @@ def view(task_uuid: str):
         owner=owner,
         activities=activities,
         users=users,
+        comments_by_uuid=comments_by_uuid,
         allowed_transitions=allowed_transitions,
         valid_statuses=VALID_STATUSES,
         format_file_size=attachment_service.format_file_size,
+        edit_window_seconds=edit_window_seconds,
     )
 
 
@@ -381,6 +397,47 @@ def delete_comment(task_uuid: str, comment_uuid: str):
         return render_activity(task)
 
     flash("Comment deleted.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+@bp.route("/<task_uuid>/comments/<comment_uuid>/edit", methods=["POST"])
+@login_required
+def edit_comment(task_uuid: str, comment_uuid: str):
+    """Edit a comment (within edit window)."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    comment = Comment.get_by_uuid(comment_uuid)
+    if comment is None or comment.task_id != task.id:
+        abort(404)
+        return
+
+    # Only comment author can edit
+    if comment.user_id != g.user.id:
+        abort(403)
+
+    # Check edit window
+    edit_window_seconds = current_app.config.get("COMMENT_EDIT_WINDOW_SECONDS", 300)
+    if not comment.is_editable(edit_window_seconds):
+        flash("Edit window has expired.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    content = request.form.get("content", "").strip()
+    if not content:
+        flash("Comment cannot be empty.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    comment.update(content)
+
+    # Update activity log with new content
+    Activity.update_comment_content(comment_uuid, content)
+
+    if is_htmx_request():
+        return render_activity(task)
+
+    flash("Comment updated.", "success")
     return redirect(url_for("tasks.view", task_uuid=task_uuid))
 
 

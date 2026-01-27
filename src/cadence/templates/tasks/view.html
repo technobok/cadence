@@ -22,7 +22,7 @@
         {% if (task.owner_id == g.user.id or g.user.is_admin) and allowed_transitions %}
         <button type="button" class="outline" onclick="document.getElementById('status-dialog').showModal()">Status</button>
         {% endif %}
-        <button type="button" class="outline" onclick="document.getElementById('comment-dialog').showModal()">Comment</button>
+        <button type="button" class="outline" onclick="openCommentDialog()">Comment</button>
         <button type="button" class="outline" onclick="document.getElementById('upload-dialog').showModal()">Upload</button>
         {% if task.owner_id == g.user.id or g.user.is_admin %}
         <button type="button" class="outline contrast" onclick="document.getElementById('delete-dialog').showModal()">Delete...</button>
@@ -40,7 +40,7 @@
     {% if task.description %}
     <div class="task-description">
         <h3>Description</h3>
-        <p>{{ task.description }}</p>
+        <div class="markdown-content">{{ task.description|markdown_block }}</div>
     </div>
     {% endif %}
 
@@ -94,26 +94,95 @@
 <dialog id="comment-dialog">
     <article>
         <header>
-            <button type="button" aria-label="Close" rel="prev" onclick="document.getElementById('comment-dialog').close()"></button>
-            <h3>Add Comment</h3>
+            <button type="button" aria-label="Close" rel="prev" onclick="closeCommentDialog()"></button>
+            <h3 id="comment-dialog-title">Add Comment</h3>
         </header>
-        <form method="POST"
+        <form id="comment-form" method="POST"
               action="{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}"
               hx-post="{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}"
               hx-target="#activity-section"
               hx-swap="innerHTML"
-              hx-on::after-request="if(event.detail.successful) document.getElementById('comment-dialog').close()">
+              hx-on::after-request="if(event.detail.successful) { this.reset(); closeCommentDialog(); }">
             <label for="dialog-content">
                 Comment
                 <textarea id="dialog-content" name="content" rows="4" required autofocus></textarea>
             </label>
+            <details class="markdown-help">
+                <summary>Formatting help</summary>
+                <ul>
+                    <li><code># Heading</code> → heading (## for smaller)</li>
+                    <li><code>**bold**</code> → <strong>bold</strong></li>
+                    <li><code>*italic*</code> → <em>italic</em></li>
+                    <li><code>~~strike~~</code> → <del>strike</del></li>
+                    <li><code>`code`</code> → <code>code</code></li>
+                    <li><code>[link](url)</code> → link</li>
+                    <li><code>- item</code> → bullet list</li>
+                    <li><code>1. item</code> → numbered list</li>
+                    <li><code>> quote</code> → blockquote</li>
+                </ul>
+            </details>
             <footer class="form-actions">
-                <button type="submit">Post Comment</button>
-                <button type="button" class="outline" onclick="document.getElementById('comment-dialog').close()">Cancel</button>
+                <button type="submit" id="comment-submit-btn">Post Comment</button>
+                <button type="button" class="outline" onclick="closeCommentDialog()">Cancel</button>
             </footer>
         </form>
     </article>
 </dialog>
+
+<script>
+var editButtonTimestamps = {};
+
+function openCommentDialog(editUrl, content, expiresInSeconds) {
+    var dialog = document.getElementById('comment-dialog');
+    var form = document.getElementById('comment-form');
+    var textarea = document.getElementById('dialog-content');
+    var title = document.getElementById('comment-dialog-title');
+    var btn = document.getElementById('comment-submit-btn');
+
+    if (editUrl) {
+        // Check if edit window has expired (client-side check)
+        var btnKey = editUrl;
+        if (editButtonTimestamps[btnKey]) {
+            var elapsed = (Date.now() - editButtonTimestamps[btnKey]) / 1000;
+            var originalExpiry = expiresInSeconds + elapsed;
+            if (elapsed >= expiresInSeconds) {
+                alert('The edit window has expired. You can no longer edit this comment.');
+                return;
+            }
+        } else {
+            // Store when we first saw this button with its expiry
+            editButtonTimestamps[btnKey] = Date.now() - (({{ edit_window_seconds }} - expiresInSeconds) * 1000);
+        }
+
+        form.setAttribute('action', editUrl);
+        form.setAttribute('hx-post', editUrl);
+        htmx.process(form);
+        textarea.value = content || '';
+        title.textContent = 'Edit Comment';
+        btn.textContent = 'Save';
+    } else {
+        form.setAttribute('action', '{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}');
+        form.setAttribute('hx-post', '{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}');
+        htmx.process(form);
+        textarea.value = '';
+        title.textContent = 'Add Comment';
+        btn.textContent = 'Post Comment';
+    }
+    dialog.showModal();
+}
+
+function closeCommentDialog() {
+    var dialog = document.getElementById('comment-dialog');
+    var form = document.getElementById('comment-form');
+    form.reset();
+    form.setAttribute('action', '{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}');
+    form.setAttribute('hx-post', '{{ url_for('tasks.add_comment', task_uuid=task.uuid) }}');
+    htmx.process(form);
+    document.getElementById('comment-dialog-title').textContent = 'Add Comment';
+    document.getElementById('comment-submit-btn').textContent = 'Post Comment';
+    dialog.close();
+}
+</script>
 
 <!-- Upload Dialog -->
 <dialog id="upload-dialog">
@@ -122,13 +191,13 @@
             <button type="button" aria-label="Close" rel="prev" onclick="document.getElementById('upload-dialog').close()"></button>
             <h3>Upload File</h3>
         </header>
-        <form method="POST"
+        <form id="upload-form" method="POST"
               action="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
               hx-post="{{ url_for('tasks.upload_attachment', task_uuid=task.uuid) }}"
               hx-target="#activity-section"
               hx-swap="innerHTML"
               hx-encoding="multipart/form-data"
-              hx-on::after-request="if(event.detail.successful) document.getElementById('upload-dialog').close()">
+              hx-on::after-request="if(event.detail.successful) { this.reset(); document.getElementById('upload-dialog').close(); }">
             <label for="dialog-file">
                 File
                 <input type="file" id="dialog-file" name="file" required>

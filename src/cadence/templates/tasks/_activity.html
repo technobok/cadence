@@ -9,18 +9,30 @@
         </div>
 
         {% if activity.action == 'commented' and activity.details and activity.details.content %}
+        {% set comment = comments_by_uuid.get(activity.details.comment_uuid) if activity.details.comment_uuid else none %}
+        {% set can_edit = comment and comment.user_id == g.user.id and comment.is_editable(edit_window_seconds) %}
+        {% set edit_expires_in = comment.seconds_until_edit_expires(edit_window_seconds) if can_edit else 0 %}
         <div class="activity-content">
-            <div class="comment-content">{{ activity.details.content }}</div>
-            {% if activity.details.comment_uuid and (activity.user_id == g.user.id or task.owner_id == g.user.id or g.user.is_admin) %}
-            <form method="POST"
-                  action="{{ url_for('tasks.delete_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
-                  hx-post="{{ url_for('tasks.delete_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
-                  hx-target="#activity-section"
-                  hx-swap="innerHTML"
-                  class="activity-delete-form">
-                <button type="submit" class="outline secondary activity-delete" onclick="return confirm('Delete this comment?')">Delete</button>
-            </form>
-            {% endif %}
+            <div class="comment-content markdown-content">{{ activity.details.content|markdown_block }}</div>
+            <div class="comment-actions">
+                {% if can_edit %}
+                <button type="button" class="outline secondary activity-edit"
+                        data-edit-url="{{ url_for('tasks.edit_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
+                        data-content="{{ activity.details.content|e }}"
+                        data-expires="{{ edit_expires_in }}"
+                        onclick="openCommentDialog(this.dataset.editUrl, this.dataset.content, parseInt(this.dataset.expires))">Edit</button>
+                {% endif %}
+                {% if activity.details.comment_uuid and (activity.user_id == g.user.id or task.owner_id == g.user.id or g.user.is_admin) %}
+                <form method="POST"
+                      action="{{ url_for('tasks.delete_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
+                      hx-post="{{ url_for('tasks.delete_comment', task_uuid=task.uuid, comment_uuid=activity.details.comment_uuid) }}"
+                      hx-target="#activity-section"
+                      hx-swap="innerHTML"
+                      class="activity-delete-form">
+                    <button type="submit" class="outline secondary activity-delete" onclick="return confirm('Delete this comment?')">Delete</button>
+                </form>
+                {% endif %}
+            </div>
         </div>
 
         {% elif activity.action == 'attachment_added' and activity.details %}

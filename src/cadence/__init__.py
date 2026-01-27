@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import mistune
 from flask import Flask, render_template, request
+from markupsafe import Markup
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from cadence.db import close_db, init_db_command
@@ -43,6 +45,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         MAX_UPLOAD_SIZE=10 * 1024 * 1024,  # 10MB
         MAGIC_LINK_EXPIRY_SECONDS=3600,
         TRUSTED_SESSION_DAYS=365,
+        COMMENT_EDIT_WINDOW_SECONDS=300,
         HOST="0.0.0.0",
         PORT=5000,
         DEV_HOST="127.0.0.1",
@@ -121,6 +124,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     "auth", "TRUSTED_SESSION_DAYS", fallback=365
                 )
 
+            if config.has_section("comments"):
+                app.config["COMMENT_EDIT_WINDOW_SECONDS"] = config.getint(
+                    "comments", "EDIT_WINDOW_SECONDS", fallback=300
+                )
+
             # Proxy settings - enable when running behind reverse proxy (Caddy, nginx)
             if config.has_section("proxy"):
                 x_for = config.getint("proxy", "X_FORWARDED_FOR", fallback=1)
@@ -177,6 +185,31 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return local_dt.strftime(f"%b %d, %Y %H:%M {tz_abbr}")
         except Exception:
             return iso_string[:16].replace("T", " ") if iso_string else ""
+
+    # Simplified markdown renderer
+    md = mistune.create_markdown(
+        escape=True,
+        plugins=["strikethrough"],
+    )
+
+    @app.template_filter("markdown")
+    def markdown_filter(text: str | None) -> Markup:
+        """Render simplified markdown to HTML."""
+        if not text:
+            return Markup("")
+        # Render markdown (mistune escapes HTML by default with escape=True)
+        html = str(md(text)).strip()
+        # Strip wrapping <p> tags for inline use if single paragraph
+        if html.startswith("<p>") and html.endswith("</p>") and html.count("<p>") == 1:
+            html = html[3:-4]
+        return Markup(html)
+
+    @app.template_filter("markdown_block")
+    def markdown_block_filter(text: str | None) -> Markup:
+        """Render markdown to HTML, preserving block structure."""
+        if not text:
+            return Markup("")
+        return Markup(str(md(text)))
 
     # Register blueprints
     from cadence.blueprints import auth, tasks
