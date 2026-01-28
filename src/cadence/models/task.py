@@ -231,8 +231,13 @@ class Task:
             params.append(owner_id)
 
         if not include_private and current_user_id:
-            # Show public tasks OR private tasks owned by current user
-            conditions.append("(is_private = 0 OR owner_id = ?)")
+            # Show public tasks OR private tasks owned by/watched by current user
+            conditions.append("""
+                (is_private = 0
+                 OR owner_id = ?
+                 OR id IN (SELECT task_id FROM task_watcher WHERE user_id = ?))
+            """)
+            params.append(current_user_id)
             params.append(current_user_id)
         elif not include_private:
             conditions.append("is_private = 0")
@@ -274,7 +279,12 @@ class Task:
             params.append(owner_id)
 
         if not include_private and current_user_id:
-            conditions.append("(is_private = 0 OR owner_id = ?)")
+            conditions.append("""
+                (is_private = 0
+                 OR owner_id = ?
+                 OR id IN (SELECT task_id FROM task_watcher WHERE user_id = ?))
+            """)
+            params.append(current_user_id)
             params.append(current_user_id)
         elif not include_private:
             conditions.append("is_private = 0")

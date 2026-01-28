@@ -49,7 +49,7 @@
 
         <label>
             <input type="checkbox" id="is_private" name="is_private" value="1" {{ 'checked' if is_private else '' }}>
-            Private (only visible to you)
+            Private (visible to owner, watchers, and admins only)
         </label>
 
         {% if task %}
