@@ -27,8 +27,17 @@ def get_user_timezone() -> ZoneInfo:
 
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     """Application factory for Cadence."""
-    # Project root is two levels up from this file (src/cadence/__init__.py)
-    project_root = Path(__file__).parent.parent.parent
+    # Project root: use CADENCE_ROOT env var, or CWD, or relative to __file__
+    if "CADENCE_ROOT" in os.environ:
+        project_root = Path(os.environ["CADENCE_ROOT"])
+    else:
+        # Check if running from source (src/cadence/__init__.py exists relative to __file__)
+        source_root = Path(__file__).parent.parent.parent
+        if (source_root / "src" / "cadence" / "__init__.py").exists():
+            project_root = source_root
+        else:
+            # Installed as package, use current working directory
+            project_root = Path.cwd()
     instance_path = project_root / "instance"
 
     app = Flask(

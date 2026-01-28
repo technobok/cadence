@@ -26,6 +26,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+cadence = ["templates/**/*.html", "static/**/*"]
+
 [tool.ruff]
 target-version = "py314"
 line-length = 100

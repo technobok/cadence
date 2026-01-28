@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+.eggs
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Instance data (mounted as volume)
+instance/
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Development files
+Makefile
+.pre-commit-config.yaml
+tests/
+
+# Docker (avoid recursive copy)
+Dockerfile
+docker-compose*.yml
+Caddyfile

@@ -1,0 +1,51 @@
+# Cadence - Caddy reverse proxy configuration
+#
+# Usage:
+#   1. Replace "cadence.example.com" with your domain
+#   2. Run: caddy run --config Caddyfile
+#   Or with Docker: docker run -v $PWD/Caddyfile:/etc/caddy/Caddyfile caddy
+#
+# Caddy automatically provisions SSL/TLS via Let's Encrypt
+
+cadence.example.com {
+    # Reverse proxy to Flask app
+    reverse_proxy app:5000 {
+        # Pass original client info
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+
+        # Health checks
+        health_uri /
+        health_interval 30s
+        health_timeout 10s
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/cadence.log
+        format json
+    }
+
+    # Security headers
+    header {
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # XSS protection
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # File upload size limit (match config.ini MAX_SIZE_MB)
+    request_body {
+        max_size 10MB
+    }
+}
+
+# Optional: Self-hosted ntfy reverse proxy
+# Uncomment if running ntfy container
+# ntfy.example.com {
+#     reverse_proxy ntfy:80
+# }

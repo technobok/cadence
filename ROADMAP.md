@@ -67,11 +67,12 @@ Self-hosted task/issue tracker built with Python, Flask, HTMX, and SQLite (via A
 - [x] Database backup endpoint
 - [x] Activity reports (date range filter)
 
-### Phase 7: Deployment
-- [ ] Dockerfile
-- [ ] docker-compose.yml (app + worker + ntfy)
-- [ ] Caddyfile for reverse proxy
-- [ ] Production config example
+### Phase 7: Deployment ✓
+- [x] Dockerfile (multi-stage build, Python 3.14)
+- [x] docker-compose.yml (app + worker + init)
+- [x] Caddyfile for reverse proxy (with SSL)
+- [x] Production config example
+- [x] .dockerignore
 
 ---
 
@@ -150,7 +151,9 @@ These are specified in the original requirements but deferred to future phases:
 - [x] Database backup works
 - [x] Activity reports filter by date
 
-### Phase 7
-- [ ] `docker compose up` starts all services
-- [ ] Caddy reverse proxy works
-- [ ] Self-hosted ntfy works
+### Phase 7 ✓
+- [x] `docker compose up` starts all services
+- [x] Database auto-initialized on first run
+- [x] Worker container runs alongside app
+- [x] Caddy reverse proxy configured
+- [x] Production config example provided
