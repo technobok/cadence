@@ -84,7 +84,7 @@ These are specified in the original requirements but deferred to future phases:
 - Tags/lables for tasks (using Tom Select), multiple tags per task permitted. Subtasks inherit parent tags by default, new tags can be created in place with tom-select; tags can be assigned a colour from the selection of picocss colours
 - Custom task types and workflows
 - Recurring tasks
-- Private tasks / ACL
+- ~~Private tasks / ACL~~ ✓
 - Batched notifications
 - Charting / advanced reporting
 
