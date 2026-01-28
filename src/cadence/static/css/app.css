@@ -719,3 +719,122 @@ table a.small[role="button"] {
 select.tomselected {
     display: none !important;
 }
+
+/* Tag badges */
+.tag-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: white;
+}
+
+.tag-badge[data-light="true"] {
+    color: #1f2937;
+}
+
+/* Tag list display */
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+}
+
+.tag-list-inline {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+/* Tags control (Tom Select wrapper) */
+.tags-control {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    width: 100%;
+}
+
+.tags-control .ts-wrapper {
+    margin-bottom: 0;
+    width: 100%;
+}
+
+.tags-control .ts-wrapper.multi .ts-control {
+    min-height: 2.5rem;
+    padding: 0.25rem 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: flex-start;
+}
+
+.tags-control .ts-wrapper.multi .ts-control > input {
+    flex: 1 1 auto;
+    min-width: 100px;
+    width: auto !important;
+}
+
+/* Tag badges in Tom Select */
+.tags-control .ts-wrapper.multi .ts-control > .tag-badge {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 1.5rem;
+    padding: 0.25rem 0.5rem !important;
+    margin: 0.15rem 0.25rem 0.15rem 0;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+/* Remove button inside tag badge */
+.tags-control .ts-wrapper.multi .ts-control > .tag-badge .remove,
+.tags-control .ts-wrapper.plugin-remove_button .ts-control > .tag-badge .remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0.5rem;
+    padding: 0;
+    border: none !important;
+    border-left: none !important;
+    background: transparent;
+    color: inherit;
+    font-size: 1.1rem;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.tags-control .ts-wrapper.multi .ts-control > .tag-badge .remove:hover {
+    opacity: 1;
+    background: transparent;
+}
+
+/* Tag option in dropdown */
+.ts-dropdown .ts-option-item .tag-badge {
+    display: inline-block;
+}
+
+/* Create tag option styling */
+.ts-dropdown .option.create {
+    color: var(--pico-primary);
+}
+
+/* Tag admin actions */
+.tag-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.tag-actions form {
+    margin: 0;
+}
+
+.tag-actions button,
+.tag-actions a[role="button"] {
+    margin: 0;
+}

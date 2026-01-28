@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Tag - Admin - Cadence{% endblock %}
+
+{% block head %}
+<style>
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.color-swatch {
+    aspect-ratio: 1;
+    border-radius: var(--pico-border-radius);
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s, border-color 0.1s;
+}
+
+.color-swatch:hover {
+    transform: scale(1.1);
+}
+
+.color-swatch.selected {
+    border-color: var(--pico-color);
+    box-shadow: 0 0 0 2px var(--pico-background-color), 0 0 0 4px var(--pico-color);
+}
+
+.tag-preview {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--pico-card-background-color);
+    border-radius: var(--pico-border-radius);
+}
+
+.tag-preview h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    color: var(--pico-muted-color);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <hgroup>
+            <h1>Edit Tag</h1>
+            <p>Modify tag name and color</p>
+        </hgroup>
+    </header>
+
+    <form method="POST">
+        <label for="name">
+            Name
+            <input type="text" id="name" name="name" value="{{ name }}" required autofocus>
+        </label>
+
+        <label>Color</label>
+        <input type="hidden" id="color" name="color" value="{{ color }}">
+        <div class="color-grid">
+            {% for tag_color in tag_colors %}
+            <div class="color-swatch{% if tag_color == color %} selected{% endif %}"
+                 style="background: {{ tag_color }}"
+                 data-color="{{ tag_color }}"
+                 onclick="selectColor('{{ tag_color }}')"></div>
+            {% endfor %}
+        </div>
+
+        <div class="tag-preview">
+            <h4>Preview</h4>
+            <span id="tag-preview" class="tag-badge" style="background: {{ color }}"{% if color in ['#fca5a5', '#fdba74', '#fcd34d', '#86efac', '#5eead4', '#93c5fd', '#c4b5fd', '#f9a8d4'] %} data-light="true"{% endif %}>{{ name or 'Tag Name' }}</span>
+        </div>
+
+        <footer class="form-actions">
+            <button type="submit">Save Changes</button>
+            <a href="{{ url_for('tags.index') }}" role="button" class="outline">Cancel</a>
+        </footer>
+    </form>
+</article>
+
+<script>
+var lightColors = ['#fca5a5', '#fdba74', '#fcd34d', '#86efac', '#5eead4', '#93c5fd', '#c4b5fd', '#f9a8d4'];
+
+function selectColor(color) {
+    // Update hidden input
+    document.getElementById('color').value = color;
+
+    // Update selected state
+    document.querySelectorAll('.color-swatch').forEach(function(swatch) {
+        swatch.classList.remove('selected');
+        if (swatch.dataset.color === color) {
+            swatch.classList.add('selected');
+        }
+    });
+
+    // Update preview
+    var preview = document.getElementById('tag-preview');
+    preview.style.background = color;
+    if (lightColors.indexOf(color) !== -1) {
+        preview.setAttribute('data-light', 'true');
+    } else {
+        preview.removeAttribute('data-light');
+    }
+}
+
+// Update preview name as user types
+document.getElementById('name').addEventListener('input', function() {
+    var preview = document.getElementById('tag-preview');
+    preview.textContent = this.value || 'Tag Name';
+});
+</script>
+{% endblock %}

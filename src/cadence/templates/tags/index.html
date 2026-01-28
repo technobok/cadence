@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Tag Management - Admin - Cadence{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <hgroup>
+            <h1>Tag Management</h1>
+            <p>{{ tags|length }} tags total</p>
+        </hgroup>
+    </header>
+
+    <div id="tags-list">
+        {% include "tags/_list.html" %}
+    </div>
+
+    <footer>
+        <a href="{{ url_for('admin.index') }}">&larr; Back to Admin</a>
+    </footer>
+</article>
+{% endblock %}

@@ -168,6 +168,31 @@ CREATE INDEX IF NOT EXISTS idx_notification_queue_status ON notification_queue(s
 CREATE INDEX IF NOT EXISTS idx_notification_queue_user ON notification_queue(user_id);
 CREATE INDEX IF NOT EXISTS idx_notification_queue_created ON notification_queue(created_at);
 
+-- Tags
+CREATE TABLE IF NOT EXISTS tag (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT UNIQUE NOT NULL,
+    name TEXT UNIQUE NOT NULL,
+    color TEXT NOT NULL DEFAULT '#3b82f6',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tag_uuid ON tag(uuid);
+CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(name);
+
+-- Task-Tag junction table
+CREATE TABLE IF NOT EXISTS task_tag (
+    task_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (task_id, tag_id),
+    FOREIGN KEY (task_id) REFERENCES task(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tag(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_tag_task ON task_tag(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_tag_tag ON task_tag(tag_id);
+
 -- Default app settings
 INSERT OR IGNORE INTO app_setting (key, value, description) VALUES
     ('notification_batch_interval_seconds', '0', 'How often to batch notifications (0 = immediate)'),

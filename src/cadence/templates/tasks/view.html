@@ -42,6 +42,10 @@
         {% include "tasks/_watchers.html" %}
     </div>
 
+    <div id="tags-section">
+        {% include "tasks/_tags.html" %}
+    </div>
+
     {% if task.due_date %}
     <p><strong>Due:</strong> {{ task.due_date|localdate }}</p>
     {% endif %}
@@ -367,24 +371,162 @@ function initWatchersTomSelect() {
     });
 }
 
+var tagsTomSelect = null;
+
+function initTagsTomSelect() {
+    // Destroy existing instance if any
+    if (tagsTomSelect) {
+        tagsTomSelect.destroy();
+        tagsTomSelect = null;
+    }
+
+    var selectEl = document.getElementById('tags-select');
+    var dataEl = document.getElementById('tags-data');
+    if (!selectEl || !dataEl) return;
+
+    var config;
+    try {
+        config = JSON.parse(dataEl.textContent);
+    } catch (e) {
+        console.error('Failed to parse tags data:', e);
+        return;
+    }
+
+    // Track if we're programmatically updating to avoid loops
+    var isUpdating = false;
+
+    tagsTomSelect = new TomSelect(selectEl, {
+        valueField: 'id',
+        labelField: 'text',
+        searchField: ['text'],
+        placeholder: 'Type to add or create...',
+        plugins: ['remove_button'],
+        items: config.tags.map(function(t) { return t.id; }),
+        options: config.tags,
+        loadThrottle: 200,
+        preload: 'focus',
+        closeAfterSelect: false,
+        create: true,
+        createOnBlur: false,
+        createFilter: function(input) {
+            // Allow creating if input has at least 1 character
+            return input.length >= 1;
+        },
+        load: function(query, callback) {
+            fetch(config.searchUrl + '?q=' + encodeURIComponent(query))
+                .then(function(response) { return response.json(); })
+                .then(function(json) { callback(json); })
+                .catch(function() { callback(); });
+        },
+        render: {
+            option: function(data, escape) {
+                if (data.color) {
+                    var lightAttr = data.light ? ' data-light="true"' : '';
+                    return '<div class="ts-option-item">' +
+                        '<span class="tag-badge" style="background: ' + escape(data.color) + '"' + lightAttr + '>' + escape(data.text) + '</span>' +
+                    '</div>';
+                }
+                return '<div class="ts-option-item">' + escape(data.text) + '</div>';
+            },
+            item: function(data, escape) {
+                var style = data.color ? ' style="background: ' + escape(data.color) + '"' : '';
+                var lightAttr = data.light ? ' data-light="true"' : '';
+                return '<div class="tag-badge"' + style + lightAttr + ' data-tag-id="' + escape(data.id) + '">' +
+                    escape(data.text) +
+                '</div>';
+            },
+            option_create: function(data, escape) {
+                return '<div class="ts-option-item create">Create tag: <strong>' + escape(data.input) + '</strong></div>';
+            }
+        },
+        onItemAdd: function(value, item) {
+            if (isUpdating) return;
+
+            // Clear input text but keep dropdown open
+            var self = this;
+            setTimeout(function() {
+                self.setTextboxValue('');
+                self.open();
+            }, 0);
+
+            // Check if this is a new tag or an existing one
+            // If the value exists in Tom Select's options with a color, it's an existing tag
+            var formData = new FormData();
+            var optionData = self.options[value];
+            if (optionData && optionData.color) {
+                // Existing tag selected from dropdown - use tag_id
+                formData.append('tag_id', value);
+            } else {
+                // New tag created by user - use tag_name (value is the typed text)
+                formData.append('tag_name', value);
+            }
+
+            fetch(config.addUrl, {
+                method: 'POST',
+                body: formData,
+                headers: { 'HX-Request': 'true' }
+            }).then(function(response) {
+                if (response.ok) {
+                    return response.text();
+                } else {
+                    throw new Error('Failed to add tag');
+                }
+            }).then(function(html) {
+                // Update the tags section with the response
+                document.getElementById('tags-section').innerHTML = html;
+                // Reinitialize and reopen dropdown for multi-select
+                setTimeout(function() {
+                    initTagsTomSelect();
+                    if (tagsTomSelect) {
+                        tagsTomSelect.focus();
+                        tagsTomSelect.open();
+                    }
+                }, 50);
+            }).catch(function() {
+                // Remove the item if add failed
+                isUpdating = true;
+                tagsTomSelect.removeItem(value, true);
+                isUpdating = false;
+            });
+        },
+        onItemRemove: function(value) {
+            if (isUpdating) return;
+            // Remove tag via API
+            var removeUrl = config.removeUrlBase.replace('{id}', value);
+            fetch(removeUrl, {
+                method: 'POST',
+                headers: { 'HX-Request': 'true' }
+            });
+        }
+    });
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(initWatchersTomSelect, 50);
+    setTimeout(initTagsTomSelect, 50);
 });
 
-// Reinitialize after any HTMX swap that affects watchers
+// Reinitialize after any HTMX swap that affects watchers or tags
 document.body.addEventListener('htmx:afterSwap', function(event) {
     var target = event.detail.target;
     if (target.id === 'watchers-section' || target.querySelector('#watchers-select')) {
         setTimeout(initWatchersTomSelect, 50);
     }
+    if (target.id === 'tags-section' || target.querySelector('#tags-select')) {
+        setTimeout(initTagsTomSelect, 50);
+    }
 });
 
 // Also catch htmx:afterSettle for OOB swaps
 document.body.addEventListener('htmx:afterSettle', function(event) {
-    var select = document.getElementById('watchers-select');
-    if (select && !select.tomselect) {
+    var watchersSelect = document.getElementById('watchers-select');
+    if (watchersSelect && !watchersSelect.tomselect) {
         setTimeout(initWatchersTomSelect, 50);
+    }
+    var tagsSelect = document.getElementById('tags-select');
+    if (tagsSelect && !tagsSelect.tomselect) {
+        setTimeout(initTagsTomSelect, 50);
     }
 });
 </script>

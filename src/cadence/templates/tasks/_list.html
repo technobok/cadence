@@ -4,6 +4,7 @@
         <tr>
             <th>Title</th>
             <th>Status</th>
+            <th>Tags</th>
             <th>Owner</th>
             <th>Due Date</th>
             <th>Created</th>
@@ -22,6 +23,17 @@
                 <span class="status-badge status-{{ task.status|replace('_', '-') }}">
                     {{ task.status|replace('_', ' ')|title }}
                 </span>
+            </td>
+            <td>
+                {% if task_tags.get(task.id) %}
+                <div class="tag-list-inline">
+                    {% for tag in task_tags[task.id] %}
+                    <span class="tag-badge" style="background: {{ tag.color }}"{% if tag.is_light() %} data-light="true"{% endif %}>{{ tag.name }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                -
+                {% endif %}
             </td>
             <td>{{ owners[task.owner_id].display_name or owners[task.owner_id].email if task.owner_id in owners else 'Unknown' }}</td>
             <td>{{ task.due_date|localdate if task.due_date else '-' }}</td>

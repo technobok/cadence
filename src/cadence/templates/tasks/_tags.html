@@ -1,0 +1,28 @@
+<p><strong>Tags:</strong></p>
+
+{% if can_manage_tags %}
+<div class="tags-control">
+    <select id="tags-select" name="tag_ids" multiple placeholder="Type to add or create..."></select>
+</div>
+<script type="application/json" id="tags-data">
+{
+    "tags": [
+        {% for tag in tags %}{% if not loop.first %},{% endif %}
+        {"id": {{ tag.id }}, "text": "{{ tag.name|e }}", "color": "{{ tag.color }}", "light": {{ 'true' if tag.is_light() else 'false' }}}{% endfor %}
+    ],
+    "addUrl": "{{ url_for('tasks.add_tag', task_uuid=task.uuid) }}",
+    "removeUrlBase": "{{ url_for('tasks.remove_tag', task_uuid=task.uuid, tag_id=0)|replace('/0/', '/{id}/') }}",
+    "searchUrl": "{{ url_for('tasks.search_tags', task_uuid=task.uuid) }}"
+}
+</script>
+{% else %}
+{% if tags %}
+<div class="tag-list">
+    {% for tag in tags %}
+    <span class="tag-badge" style="background: {{ tag.color }}"{% if tag.is_light() %} data-light="true"{% endif %}>{{ tag.name }}</span>
+    {% endfor %}
+</div>
+{% else %}
+<p class="muted">No tags.</p>
+{% endif %}
+{% endif %}

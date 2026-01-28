@@ -15,7 +15,17 @@ from flask import (
 )
 
 from cadence.blueprints.auth import login_required
-from cadence.models import VALID_STATUSES, Activity, Attachment, Comment, Task, TaskWatcher, User
+from cadence.models import (
+    VALID_STATUSES,
+    Activity,
+    Attachment,
+    Comment,
+    Tag,
+    Task,
+    TaskTag,
+    TaskWatcher,
+    User,
+)
 from cadence.models.task import STATUS_TRANSITIONS
 from cadence.services import attachment_service, notification_service
 
@@ -132,6 +142,27 @@ def render_activity_with_watchers_oob(task: Task) -> str:
     return activity_html + oob_html
 
 
+def get_tags_context(task: Task) -> dict:
+    """Get tags context data for a task."""
+    tag_ids = TaskTag.get_tag_ids_for_task(task.id)
+    tags = [Tag.get_by_id(tid) for tid in tag_ids]
+    tags = [t for t in tags if t]
+
+    # Can manage tags if owner or admin
+    can_manage_tags = task.owner_id == g.user.id or g.user.is_admin
+
+    return {
+        "task": task,
+        "tags": tags,
+        "can_manage_tags": can_manage_tags,
+    }
+
+
+def render_tags_section(task: Task) -> str:
+    """Render the tags section for a task."""
+    return render_template("tasks/_tags.html", **get_tags_context(task))
+
+
 @bp.route("/")
 @login_required
 def index():
@@ -170,11 +201,18 @@ def index():
     owner_ids = {t.owner_id for t in tasks}
     owners = {u.id: u for u in [User.get_by_id(oid) for oid in owner_ids] if u}
 
+    # Get tags for each task
+    task_tags: dict[int, list[Tag]] = {}
+    for task in tasks:
+        tag_ids = TaskTag.get_tag_ids_for_task(task.id)
+        task_tags[task.id] = [t for t in [Tag.get_by_id(tid) for tid in tag_ids] if t]
+
     return render_partial_or_full(
         "tasks/_list.html",
         "tasks/index.html",
         tasks=tasks,
         owners=owners,
+        task_tags=task_tags,
         status_filter=status_filter,
         owner_filter=owner_filter,
         page=page,
@@ -289,6 +327,11 @@ def view(task_uuid: str):
         all_users = User.get_all()
         available_users = [u for u in all_users if u.id not in watcher_ids]
 
+    # Get tags for this task
+    tag_ids = TaskTag.get_tag_ids_for_task(task.id)
+    tags = [t for t in [Tag.get_by_id(tid) for tid in tag_ids] if t]
+    can_manage_tags = task.owner_id == g.user.id or g.user.is_admin
+
     return render_template(
         "tasks/view.html",
         task=task,
@@ -305,6 +348,8 @@ def view(task_uuid: str):
         watchers=watchers,
         can_manage_watchers=can_manage_watchers,
         available_users=available_users,
+        tags=tags,
+        can_manage_tags=can_manage_tags,
     )
 
 
@@ -898,3 +943,108 @@ def search_users(task_uuid: str):
             break
 
     return jsonify(results)
+
+
+# --- Tags ---
+
+
+@bp.route("/<task_uuid>/tags/search")
+@login_required
+def search_tags(task_uuid: str):
+    """Search tags for adding to task (returns JSON for Tom Select)."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return jsonify([])
+
+    # Only owner or admin can manage tags
+    if task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+        return jsonify([])
+
+    query = request.args.get("q", "").strip()
+
+    # Get current tag IDs to exclude
+    current_tag_ids = set(TaskTag.get_tag_ids_for_task(task.id))
+
+    # Search all tags
+    if query:
+        all_tags = Tag.search(query)
+    else:
+        all_tags = Tag.get_all()
+
+    results = []
+    for tag in all_tags:
+        if tag.id in current_tag_ids:
+            continue
+        results.append(
+            {
+                "id": tag.id,
+                "text": tag.name,
+                "color": tag.color,
+                "light": tag.is_light(),
+            }
+        )
+        if len(results) >= 20:
+            break
+
+    return jsonify(results)
+
+
+@bp.route("/<task_uuid>/tags", methods=["POST"])
+@login_required
+def add_tag(task_uuid: str):
+    """Add a tag to a task (supports tag_id or tag_name for inline creation)."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Only owner or admin can manage tags
+    if task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    tag_id = request.form.get("tag_id", type=int)
+    tag_name = request.form.get("tag_name", "").strip()
+
+    tag: Tag | None = None
+
+    if tag_id:
+        tag = Tag.get_by_id(tag_id)
+    elif tag_name:
+        # Get or create tag by name
+        tag = Tag.get_or_create(tag_name)
+
+    if tag is None:
+        flash("Tag not found.", "error")
+        return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+    TaskTag.add(task.id, tag.id)
+
+    if is_htmx_request():
+        return render_tags_section(task)
+
+    flash(f"Tag '{tag.name}' added.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))
+
+
+@bp.route("/<task_uuid>/tags/<int:tag_id>/remove", methods=["POST"])
+@login_required
+def remove_tag(task_uuid: str, tag_id: int):
+    """Remove a tag from a task."""
+    task = Task.get_by_uuid(task_uuid)
+    if task is None:
+        abort(404)
+        return
+
+    # Only owner or admin can manage tags
+    if task.owner_id != g.user.id and not g.user.is_admin:
+        abort(403)
+
+    TaskTag.remove(task.id, tag_id)
+
+    if is_htmx_request():
+        return render_tags_section(task)
+
+    flash("Tag removed.", "success")
+    return redirect(url_for("tasks.view", task_uuid=task_uuid))

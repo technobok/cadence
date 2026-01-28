@@ -222,11 +222,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return Markup(str(md(text)))
 
     # Register blueprints
-    from cadence.blueprints import admin, auth, tasks
+    from cadence.blueprints import admin, auth, tags, tasks
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(tasks.bp)
     app.register_blueprint(admin.bp)
+    app.register_blueprint(tags.bp)
 
     @app.route("/")
     def index():
