@@ -1,77 +1,46 @@
 /* Cadence custom JavaScript */
 
-// Theme management (system/light/dark)
+// Theme management (light/dark toggle, defaults to browser preference)
 (function() {
-    const THEME_KEY = 'cadence-theme';
-    const html = document.documentElement;
+    var THEME_KEY = 'cadence-theme';
+    var html = document.documentElement;
 
     function getSystemTheme() {
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
 
-    function getStoredTheme() {
-        return localStorage.getItem(THEME_KEY);
+    function getCurrentTheme() {
+        return localStorage.getItem(THEME_KEY) || getSystemTheme();
     }
 
-    function getThemeMode() {
-        // Returns 'system', 'light', or 'dark'
-        return getStoredTheme() || 'system';
+    function applyTheme(theme) {
+        html.setAttribute('data-theme', theme);
     }
 
-    function setTheme(mode) {
-        if (mode === 'system') {
-            html.setAttribute('data-theme', getSystemTheme());
-            localStorage.removeItem(THEME_KEY);
-        } else {
-            html.setAttribute('data-theme', mode);
-            localStorage.setItem(THEME_KEY, mode);
-        }
-        updateToggleButton(mode);
-    }
+    // Apply immediately to prevent FOUC
+    applyTheme(getCurrentTheme());
 
-    function cycleTheme() {
-        // Cycle: system → light → dark → system
-        const current = getThemeMode();
-        const next = current === 'system' ? 'light' : current === 'light' ? 'dark' : 'system';
-        setTheme(next);
-    }
+    document.addEventListener('DOMContentLoaded', function() {
+        var checkbox = document.getElementById('mode-checkbox');
+        if (!checkbox) return;
 
-    function updateToggleButton(mode) {
-        const toggle = document.getElementById('theme-toggle');
-        if (!toggle) return;
+        checkbox.checked = (getCurrentTheme() === 'dark');
 
-        // Update button content based on mode
-        const icons = {
-            system: '\u2699',  // gear
-            light: '\u2600',   // sun
-            dark: '\u263E'     // moon
-        };
-        toggle.textContent = icons[mode] || icons.system;
-        toggle.setAttribute('title', 'Theme: ' + mode + ' (click to change)');
-    }
-
-    // Initialize theme on page load
-    function initTheme() {
-        const mode = getThemeMode();
-        setTheme(mode);
-    }
-
-    // Listen for system theme changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
-        if (!getStoredTheme()) {
-            setTheme('system');
-        }
+        checkbox.addEventListener('change', function() {
+            html.classList.add('trans');
+            var theme = checkbox.checked ? 'dark' : 'light';
+            applyTheme(theme);
+            localStorage.setItem(THEME_KEY, theme);
+        });
     });
 
-    // Initialize
-    initTheme();
-
-    // Bind toggle button
-    document.addEventListener('DOMContentLoaded', function() {
-        const toggle = document.getElementById('theme-toggle');
-        if (toggle) {
-            toggle.addEventListener('click', cycleTheme);
-            updateToggleButton(getThemeMode());
+    // Respond to system preference changes when no stored preference
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+        if (!localStorage.getItem(THEME_KEY)) {
+            var theme = getSystemTheme();
+            applyTheme(theme);
+            var checkbox = document.getElementById('mode-checkbox');
+            if (checkbox) checkbox.checked = (theme === 'dark');
         }
     });
 })();
