@@ -1,6 +1,5 @@
 """Background worker for sending notifications."""
 
-import configparser
 import logging
 import sys
 import time
@@ -10,6 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import apsw
+from cadence.config import parse_value, resolve_entry
+from cadence.db import get_standalone_db
 from cadence.services.ntfy_service import send_ntfy
 
 # Configure logging
@@ -20,31 +21,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_config() -> configparser.ConfigParser:
-    """Load config from config.ini."""
-    config = configparser.ConfigParser()
-    config_path = Path(__file__).parent.parent / "instance" / "config.ini"
-    if config_path.exists():
-        config.read(config_path)
-    return config
-
-
-def get_db_connection(config: configparser.ConfigParser) -> apsw.Connection:
-    """Get database connection."""
-    db_path = config.get("database", "PATH", fallback="instance/cadence.sqlite3")
-    # Make path relative to project root
-    if not Path(db_path).is_absolute():
-        db_path = str(Path(__file__).parent.parent / db_path)
-
-    conn = apsw.Connection(db_path)
-    conn.execute("PRAGMA busy_timeout = 5000;")
-    conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;")
-    return conn
+def _get_config_value(key: str) -> str | int | bool | list[str]:
+    """Read a config value from the database, falling back to registry default."""
+    entry = resolve_entry(key)
+    if not entry:
+        raise ValueError(f"Unknown config key: {key}")
+    db = get_standalone_db()
+    row = db.execute("SELECT value FROM app_setting WHERE key = ?", (key,)).fetchone()
+    if row:
+        return parse_value(entry, str(row[0]))
+    return entry.default
 
 
 def send_email_notification(
-    config: configparser.ConfigParser,
     to_email: str,
     subject: str,
     body: str,
@@ -56,12 +45,12 @@ def send_email_notification(
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
 
-    smtp_server = config.get("mail", "SMTP_SERVER", fallback="")
-    smtp_port = config.getint("mail", "SMTP_PORT", fallback=587)
-    smtp_use_tls = config.getboolean("mail", "SMTP_USE_TLS", fallback=True)
-    smtp_username = config.get("mail", "SMTP_USERNAME", fallback="")
-    smtp_password = config.get("mail", "SMTP_PASSWORD", fallback="")
-    mail_sender = config.get("mail", "MAIL_SENDER", fallback="")
+    smtp_server = _get_config_value("mail.smtp_server")
+    smtp_port = _get_config_value("mail.smtp_port")
+    smtp_use_tls = _get_config_value("mail.smtp_use_tls")
+    smtp_username = _get_config_value("mail.smtp_username")
+    smtp_password = _get_config_value("mail.smtp_password")
+    mail_sender = _get_config_value("mail.mail_sender")
 
     if not smtp_server or not mail_sender:
         logger.warning("SMTP not configured, skipping email send")
@@ -101,7 +90,6 @@ def send_email_notification(
 
 def process_notifications(
     conn: apsw.Connection,
-    config: configparser.ConfigParser,
     batch_size: int = 50,
     max_retries: int = 3,
 ) -> int:
@@ -124,7 +112,7 @@ def process_notifications(
 
     notifications = cursor.fetchall()
     processed = 0
-    ntfy_server = config.get("ntfy", "SERVER", fallback="https://ntfy.sh")
+    ntfy_server = _get_config_value("ntfy.server")
 
     for row in notifications:
         (
@@ -146,7 +134,7 @@ def process_notifications(
 
         try:
             if channel == "email":
-                success = send_email_notification(config, user_email, subject, body, body_html)
+                success = send_email_notification(user_email, subject, body, body_html)
             elif channel == "ntfy":
                 if user_ntfy_topic:
                     # Extract click URL from body if present
@@ -201,10 +189,9 @@ def process_notifications(
 
 def run_worker():
     """Main worker loop."""
-    config = get_config()
-    poll_interval = config.getint("worker", "POLL_INTERVAL", fallback=5)
-    batch_size = config.getint("worker", "BATCH_SIZE", fallback=50)
-    max_retries = config.getint("worker", "MAX_RETRIES", fallback=3)
+    poll_interval = _get_config_value("worker.poll_interval")
+    batch_size = _get_config_value("worker.batch_size")
+    max_retries = _get_config_value("worker.max_retries")
 
     logger.info(
         f"Starting notification worker (poll_interval={poll_interval}s, "
@@ -213,11 +200,10 @@ def run_worker():
 
     while True:
         try:
-            conn = get_db_connection(config)
-            processed = process_notifications(conn, config, batch_size, max_retries)
+            db = get_standalone_db()
+            processed = process_notifications(db, batch_size, max_retries)
             if processed > 0:
                 logger.info(f"Processed {processed} notifications")
-            conn.close()
         except Exception as e:
             logger.error(f"Worker error: {e}")
 

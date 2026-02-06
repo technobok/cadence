@@ -1,19 +1,17 @@
 """Cadence - A self-contained task and issue tracker."""
 
-import configparser
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import click
+import apsw
 import mistune
 from flask import Flask, render_template, request
 from markupsafe import Markup
-from werkzeug.middleware.proxy_fix import ProxyFix
 
-from cadence.db import close_db, init_db_command
+from cadence.config import KEY_MAP, REGISTRY, parse_value
 
 
 def get_user_timezone() -> ZoneInfo:
@@ -27,18 +25,23 @@ def get_user_timezone() -> ZoneInfo:
 
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     """Application factory for Cadence."""
-    # Project root: use CADENCE_ROOT env var, or CWD, or relative to __file__
-    if "CADENCE_ROOT" in os.environ:
-        project_root = Path(os.environ["CADENCE_ROOT"])
-    else:
-        # Check if running from source (src/cadence/__init__.py exists relative to __file__)
-        source_root = Path(__file__).parent.parent.parent
-        if (source_root / "src" / "cadence" / "__init__.py").exists():
-            project_root = source_root
+    # Resolve database path
+    db_path = os.environ.get("CADENCE_DB")
+    if not db_path:
+        if "CADENCE_ROOT" in os.environ:
+            project_root = Path(os.environ["CADENCE_ROOT"])
         else:
-            # Installed as package, use current working directory
-            project_root = Path.cwd()
-    instance_path = project_root / "instance"
+            source_root = Path(__file__).parent.parent.parent
+            if (source_root / "src" / "cadence" / "__init__.py").exists():
+                project_root = source_root
+            else:
+                project_root = Path.cwd()
+        db_path = str(project_root / "instance" / "cadence.sqlite3")
+        instance_path = project_root / "instance"
+    else:
+        instance_path = Path(db_path).parent
+
+    instance_path.mkdir(parents=True, exist_ok=True)
 
     app = Flask(
         __name__,
@@ -46,123 +49,30 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         instance_relative_config=True,
     )
 
-    # Default configuration
+    # Minimal defaults before DB config is loaded
     app.config.from_mapping(
         SECRET_KEY="dev",
-        DATABASE_PATH=str(instance_path / "cadence.sqlite3"),
-        BLOBS_DIRECTORY=str(instance_path / "blobs"),
-        BACKUPS_DIRECTORY=str(instance_path / "backups"),
-        MAX_UPLOAD_SIZE=10 * 1024 * 1024,  # 10MB
-        MAGIC_LINK_EXPIRY_SECONDS=3600,
-        TRUSTED_SESSION_DAYS=365,
-        COMMENT_EDIT_WINDOW_SECONDS=300,
-        HOST="0.0.0.0",
-        PORT=5000,
-        DEV_HOST="127.0.0.1",
-        DEV_PORT=5000,
+        DATABASE_PATH=db_path,
     )
 
-    if test_config is None:
-        # Load config.ini if it exists
-        config_path = instance_path / "config.ini"
-        if not config_path.exists():
-            config_path = project_root / "config.ini"
-
-        if config_path.exists():
-            config = configparser.ConfigParser()
-            config.read(config_path)
-
-            if config.has_section("server"):
-                if config.has_option("server", "SECRET_KEY"):
-                    app.config["SECRET_KEY"] = config.get("server", "SECRET_KEY")
-                if config.has_option("server", "DEBUG"):
-                    app.config["DEBUG"] = config.getboolean("server", "DEBUG")
-                if config.has_option("server", "HOST"):
-                    app.config["HOST"] = config.get("server", "HOST")
-                if config.has_option("server", "PORT"):
-                    app.config["PORT"] = config.getint("server", "PORT")
-                if config.has_option("server", "DEV_HOST"):
-                    app.config["DEV_HOST"] = config.get("server", "DEV_HOST")
-                if config.has_option("server", "DEV_PORT"):
-                    app.config["DEV_PORT"] = config.getint("server", "DEV_PORT")
-
-            if config.has_section("database"):
-                if config.has_option("database", "PATH"):
-                    db_path = config.get("database", "PATH")
-                    if not os.path.isabs(db_path):
-                        db_path = str(project_root / db_path)
-                    app.config["DATABASE_PATH"] = db_path
-
-            if config.has_section("uploads"):
-                if config.has_option("uploads", "MAX_SIZE_MB"):
-                    app.config["MAX_UPLOAD_SIZE"] = (
-                        config.getint("uploads", "MAX_SIZE_MB") * 1024 * 1024
-                    )
-
-            if config.has_section("blobs"):
-                if config.has_option("blobs", "DIRECTORY"):
-                    blobs_dir = config.get("blobs", "DIRECTORY")
-                    if not os.path.isabs(blobs_dir):
-                        blobs_dir = str(project_root / blobs_dir)
-                    app.config["BLOBS_DIRECTORY"] = blobs_dir
-
-            if config.has_section("backups"):
-                if config.has_option("backups", "DIRECTORY"):
-                    backups_dir = config.get("backups", "DIRECTORY")
-                    if not os.path.isabs(backups_dir):
-                        backups_dir = str(project_root / backups_dir)
-                    app.config["BACKUPS_DIRECTORY"] = backups_dir
-
-            if config.has_section("mail"):
-                app.config["SMTP_SERVER"] = config.get("mail", "SMTP_SERVER", fallback="")
-                app.config["SMTP_PORT"] = config.getint("mail", "SMTP_PORT", fallback=587)
-                app.config["SMTP_USE_TLS"] = config.getboolean(
-                    "mail", "SMTP_USE_TLS", fallback=True
-                )
-                app.config["SMTP_USERNAME"] = config.get("mail", "SMTP_USERNAME", fallback="")
-                app.config["SMTP_PASSWORD"] = config.get("mail", "SMTP_PASSWORD", fallback="")
-                app.config["MAIL_SENDER"] = config.get("mail", "MAIL_SENDER", fallback="")
-
-            if config.has_section("ntfy"):
-                app.config["NTFY_SERVER"] = config.get("ntfy", "SERVER", fallback="https://ntfy.sh")
-
-            if config.has_section("auth"):
-                app.config["MAGIC_LINK_EXPIRY_SECONDS"] = config.getint(
-                    "auth", "MAGIC_LINK_EXPIRY_SECONDS", fallback=3600
-                )
-                app.config["TRUSTED_SESSION_DAYS"] = config.getint(
-                    "auth", "TRUSTED_SESSION_DAYS", fallback=365
-                )
-
-            if config.has_section("comments"):
-                app.config["COMMENT_EDIT_WINDOW_SECONDS"] = config.getint(
-                    "comments", "EDIT_WINDOW_SECONDS", fallback=300
-                )
-
-            # Proxy settings - enable when running behind reverse proxy (Caddy, nginx)
-            if config.has_section("proxy"):
-                x_for = config.getint("proxy", "X_FORWARDED_FOR", fallback=1)
-                x_proto = config.getint("proxy", "X_FORWARDED_PROTO", fallback=1)
-                x_host = config.getint("proxy", "X_FORWARDED_HOST", fallback=1)
-                x_prefix = config.getint("proxy", "X_FORWARDED_PREFIX", fallback=0)
-                app.wsgi_app = ProxyFix(  # type: ignore[assignment]
-                    app.wsgi_app,
-                    x_for=x_for,
-                    x_proto=x_proto,
-                    x_host=x_host,
-                    x_prefix=x_prefix,
-                )
-    else:
+    if test_config is not None:
         app.config.from_mapping(test_config)
+    else:
+        _load_config_from_db(app)
+
+    # Convert MAX_UPLOAD_SIZE_MB to bytes for Flask/blueprint usage
+    max_mb = app.config.get("MAX_UPLOAD_SIZE_MB", 10)
+    app.config["MAX_UPLOAD_SIZE"] = max_mb * 1024 * 1024
 
     # Ensure directories exist
-    instance_path.mkdir(parents=True, exist_ok=True)
-    Path(app.config["BLOBS_DIRECTORY"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["BACKUPS_DIRECTORY"]).mkdir(parents=True, exist_ok=True)
+    blobs_dir = app.config.get("BLOBS_DIRECTORY", str(instance_path / "blobs"))
+    backups_dir = app.config.get("BACKUPS_DIRECTORY", str(instance_path / "backups"))
+    Path(blobs_dir).mkdir(parents=True, exist_ok=True)
+    Path(backups_dir).mkdir(parents=True, exist_ok=True)
 
-    # Register database teardown and CLI command
+    from cadence.db import close_db
+
     app.teardown_appcontext(close_db)
-    app.cli.add_command(init_db_command)
 
     # Jinja filters for date formatting
     @app.template_filter("localdate")
@@ -233,38 +143,55 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def index():
         return render_template("index.html")
 
-    # CLI commands
-    @app.cli.command("make-admin")
-    @click.argument("email")
-    def make_admin_command(email: str):
-        """Grant admin privileges to a user by email."""
-        from cadence.models import User
-
-        user = User.get_by_email(email)
-        if not user:
-            # Create the user if they don't exist
-            user = User.create(email=email, is_admin=True)
-            click.echo(f"Created admin user: {email}")
-        elif user.is_admin:
-            click.echo(f"User {email} is already an admin.")
-        else:
-            user.update(is_admin=True)
-            click.echo(f"Granted admin privileges to: {email}")
-
-    @app.cli.command("list-users")
-    def list_users_command():
-        """List all users."""
-        from cadence.models import User
-
-        users = User.get_all(include_inactive=True)
-        if not users:
-            click.echo("No users found.")
-            return
-        click.echo(f"{'Email':<40} {'Admin':<8} {'Active':<8}")
-        click.echo("-" * 56)
-        for user in users:
-            admin = "Yes" if user.is_admin else "No"
-            active = "Yes" if user.is_active else "No"
-            click.echo(f"{user.email:<40} {admin:<8} {active:<8}")
-
     return app
+
+
+def _load_config_from_db(app: Flask) -> None:
+    """Load configuration from the database into Flask app.config."""
+    db_path = app.config["DATABASE_PATH"]
+
+    try:
+        conn = apsw.Connection(db_path, flags=apsw.SQLITE_OPEN_READONLY)
+    except apsw.CantOpenError:
+        # Database doesn't exist yet (init-db hasn't been run)
+        return
+
+    try:
+        rows = conn.execute("SELECT key, value FROM app_setting").fetchall()
+    except apsw.SQLError:
+        # Table doesn't exist yet
+        conn.close()
+        return
+
+    db_values = {str(r[0]): str(r[1]) for r in rows}
+    conn.close()
+
+    # Load SECRET_KEY from database
+    if "secret_key" in db_values:
+        app.config["SECRET_KEY"] = db_values["secret_key"]
+
+    # Apply registry entries
+    for entry in REGISTRY:
+        flask_key = KEY_MAP.get(entry.key)
+        if not flask_key:
+            continue
+
+        raw = db_values.get(entry.key)
+        if raw is not None:
+            value = parse_value(entry, raw)
+        else:
+            value = entry.default
+
+        app.config[flask_key] = value
+
+    # Apply ProxyFix if any proxy values are non-zero
+    x_for = app.config.get("PROXY_X_FORWARDED_FOR", 0)
+    x_proto = app.config.get("PROXY_X_FORWARDED_PROTO", 0)
+    x_host = app.config.get("PROXY_X_FORWARDED_HOST", 0)
+    x_prefix = app.config.get("PROXY_X_FORWARDED_PREFIX", 0)
+    if any((x_for, x_proto, x_host, x_prefix)):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app, x_for=x_for, x_proto=x_proto, x_host=x_host, x_prefix=x_prefix
+        )
