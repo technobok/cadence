@@ -1,7 +1,7 @@
-.PHONY: help sync install init-db run rundev worker check clean config-list config-set config-import
+.PHONY: help sync install init-db run rundev worker check clean config-list config-set config-import config-export
 
 SHELL := /bin/bash
-VENV_DIR := .venv_docker
+VENV_DIR := $(or $(VIRTUAL_ENV),.venv)
 ADMIN := $(VENV_DIR)/bin/cadence-admin
 WEB := $(VENV_DIR)/bin/cadence-web
 PYTHON := $(VENV_DIR)/bin/python
@@ -21,8 +21,13 @@ help:
 	@echo "config-list  - Show all config settings"
 	@echo "config-set KEY=key VAL=value  - Set a config value"
 	@echo "config-import FILE=path  - Import settings from INI file"
+	@echo "config-export FILE=path  - Export all settings as a shell script"
 	@echo "check    - Run ruff and ty for code quality"
 	@echo "clean    - Remove temporary files and database"
+	@echo ""
+	@echo "Database: instance/cadence.sqlite3 (default)"
+	@echo "Set CADENCE_DB to override, e.g.:"
+	@echo "  export CADENCE_DB=/data/cadence.sqlite3"
 
 sync:
 	@echo "--- Syncing dependencies ---"
@@ -56,11 +61,14 @@ config-set:
 config-import:
 	@$(ADMIN) config import $(or $(FILE),$(file))
 
+config-export:
+	@$(ADMIN) config export $(or $(FILE),$(file))
+
 check:
 	@echo "--- Running code quality checks ---"
 	@$(RUFF) format src
 	@$(RUFF) check src --fix
-	@$(TY) check src
+	@if [ -z "$$VIRTUAL_ENV" ]; then unset VIRTUAL_ENV; fi; $(TY) check src
 
 clean:
 	@echo "--- Cleaning up ---"
