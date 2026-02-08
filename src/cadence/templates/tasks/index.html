@@ -14,22 +14,22 @@
 
     <div class="filters">
         <fieldset role="group">
-            <a href="{{ url_for('tasks.index') }}" role="button" class="{{ 'primary' if not status_filter else 'outline' }}">
+            <button type="button" onclick="location.href='{{ url_for('tasks.index') }}'" class="{{ 'primary' if not status_filter else 'outline' }}">
                 All ({{ total_count }})
-            </a>
+            </button>
             {% for status in valid_statuses %}
-            <a href="{{ url_for('tasks.index', status=status) }}" role="button" class="{{ 'primary' if status_filter == status else 'outline' }}">
+            <button type="button" onclick="location.href='{{ url_for('tasks.index', status=status) }}'" class="{{ 'primary' if status_filter == status else 'outline' }}">
                 {{ status|replace('_', ' ')|title }} ({{ status_counts[status] }})
-            </a>
+            </button>
             {% endfor %}
         </fieldset>
         <fieldset role="group">
-            <a href="{{ url_for('tasks.index', status=status_filter) if status_filter else url_for('tasks.index') }}" role="button" class="{{ 'secondary' if not owner_filter else 'outline secondary' }}">
+            <button type="button" onclick="location.href='{{ url_for('tasks.index', status=status_filter) if status_filter else url_for('tasks.index') }}'" class="{{ 'secondary' if not owner_filter else 'outline secondary' }}">
                 All Owners
-            </a>
-            <a href="{{ url_for('tasks.index', status=status_filter, owner='me') if status_filter else url_for('tasks.index', owner='me') }}" role="button" class="{{ 'secondary' if owner_filter == 'me' else 'outline secondary' }}">
+            </button>
+            <button type="button" onclick="location.href='{{ url_for('tasks.index', status=status_filter, owner='me') if status_filter else url_for('tasks.index', owner='me') }}'" class="{{ 'secondary' if owner_filter == 'me' else 'outline secondary' }}">
                 My Tasks
-            </a>
+            </button>
         </fieldset>
     </div>
 

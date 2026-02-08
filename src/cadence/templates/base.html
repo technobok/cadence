@@ -30,7 +30,7 @@
                 <li><a href="{{ url_for('auth.settings') }}">{{ g.user.display_name or g.user.email }}</a></li>
                 <li><button type="button" class="outline secondary" onclick="location.href='{{ url_for('auth.logout') }}'">Logout</button></li>
                 {% else %}
-                <li><a href="{{ url_for('auth.login') }}" role="button" class="outline">Login</a></li>
+                <li><button type="button" onclick="location.href='{{ url_for('auth.login') }}'" class="outline">Login</button></li>
                 {% endif %}
                 <li>
                     <label class="theme-toggle" aria-label="Toggle theme">

@@ -18,7 +18,7 @@
             <td>{{ item.usage_count }} task{% if item.usage_count != 1 %}s{% endif %}</td>
             <td>
                 <div class="tag-actions">
-                    <a href="{{ url_for('tags.edit', tag_uuid=item.tag.uuid) }}" role="button" class="small outline">Edit</a>
+                    <button type="button" onclick="location.href='{{ url_for('tags.edit', tag_uuid=item.tag.uuid) }}'" class="small outline">Edit</button>
                     {% if item.usage_count == 0 %}
                     <form method="POST" action="{{ url_for('tags.delete', tag_uuid=item.tag.uuid) }}" style="display: inline;">
                         <button type="submit" class="small outline contrast">Delete</button>

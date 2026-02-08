@@ -77,7 +77,7 @@
 
         <footer class="form-actions">
             <button type="submit">Save Changes</button>
-            <a href="{{ url_for('tags.index') }}" role="button" class="outline">Cancel</a>
+            <button type="button" onclick="location.href='{{ url_for('tags.index') }}'" class="outline">Cancel</button>
         </footer>
     </form>
 </article>

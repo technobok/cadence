@@ -15,10 +15,10 @@
     </div>
 
     <nav class="admin-nav">
-        <a href="{{ url_for('admin.users') }}" role="button" class="outline">Manage Users</a>
-        <a href="{{ url_for('tags.index') }}" role="button" class="outline">Manage Tags</a>
-        <a href="{{ url_for('admin.reports') }}" role="button" class="outline">Activity Reports</a>
-        <a href="{{ url_for('admin.backups') }}" role="button" class="outline">Backups</a>
+        <button type="button" onclick="location.href='{{ url_for('admin.users') }}'" class="outline">Manage Users</button>
+        <button type="button" onclick="location.href='{{ url_for('tags.index') }}'" class="outline">Manage Tags</button>
+        <button type="button" onclick="location.href='{{ url_for('admin.reports') }}'" class="outline">Activity Reports</button>
+        <button type="button" onclick="location.href='{{ url_for('admin.backups') }}'" class="outline">Backups</button>
     </nav>
 </article>
 {% endblock %}

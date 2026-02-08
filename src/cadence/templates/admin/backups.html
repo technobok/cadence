@@ -29,8 +29,8 @@
                 <td>{{ (backup.size / 1024 / 1024)|round(2) }} MB</td>
                 <td>{{ backup.created.strftime('%Y-%m-%d %H:%M') }}</td>
                 <td class="backup-actions">
-                    <a href="{{ url_for('admin.download_backup', filename=backup.name) }}"
-                       role="button" class="outline small">Download</a>
+                    <button type="button" onclick="location.href='{{ url_for('admin.download_backup', filename=backup.name) }}'"
+                            class="outline small">Download</button>
                     <form method="POST"
                           action="{{ url_for('admin.delete_backup', filename=backup.name) }}"
                           onsubmit="return confirm('Delete this backup?');">
