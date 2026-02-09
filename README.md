@@ -56,10 +56,13 @@ All CLI commands (`cadence-admin`, `make config-*`, `make init-db`) and the web 
 
 ## Docker Deployment
 
-### Quick Start
+The `docker-compose.yml` joins a shared Docker network (`platform-net`) for use behind a reverse proxy.
 
 ```bash
-# Build and start all services
+# First time only — initialize the database
+docker compose --profile init up init
+
+# Build and start
 docker compose build
 docker compose up -d
 
@@ -69,8 +72,6 @@ docker compose exec app make config-set KEY=mail.smtp_username VAL=tasks@example
 docker compose exec app make config-set KEY=mail.smtp_password VAL=secret
 docker compose exec app make config-set KEY=mail.mail_sender VAL=tasks@example.com
 ```
-
-The app will be available at http://localhost:5001
 
 To replicate configuration from another instance, export and import:
 
@@ -84,50 +85,20 @@ bash cadence-config.sh
 
 ### Services
 
-The `docker-compose.yml` includes:
-
-| Service | Description | Default |
-|---------|-------------|---------|
-| `app` | Flask application (port 5001) | Enabled |
-| `worker` | Background notification worker | Enabled |
-| `init` | One-time database initialization | Enabled |
-| `caddy` | Reverse proxy with automatic HTTPS | Commented out |
-| `ntfy` | Self-hosted push notifications | Commented out |
-
-### Optional: Caddy Reverse Proxy
-
-To enable the built-in Caddy reverse proxy with automatic HTTPS:
-
-1. Edit `Caddyfile` - replace `cadence.example.com` with your domain
-2. Edit `docker-compose.yml`:
-   - Uncomment the `caddy` service
-   - Uncomment the `caddy-data` and `caddy-config` volumes
-   - Change `app` from `ports: "5001:5000"` to `expose: "5000"`
-3. Enable proxy headers:
-   ```bash
-   make config-set KEY=proxy.x_forwarded_for VAL=1
-   make config-set KEY=proxy.x_forwarded_proto VAL=1
-   make config-set KEY=proxy.x_forwarded_host VAL=1
-   ```
-
-### Optional: Self-hosted ntfy
-
-To use a self-hosted ntfy server instead of ntfy.sh:
-
-1. Edit `docker-compose.yml` - uncomment the `ntfy` service and `ntfy-cache` volume
-2. Update the ntfy server setting:
-   ```bash
-   make config-set KEY=ntfy.server VAL=http://ntfy:80
-   ```
+| Service | Description |
+|---------|-------------|
+| `app` | Flask application (port 5000 on platform-net) |
+| `worker` | Background notification worker |
+| `init` | One-time database initialization (profile: init) |
 
 ### Data Persistence
 
-All persistent data is stored in `./instance/`:
+All persistent data is stored in the `cadence-data` Docker volume:
 - `cadence.sqlite3` - Database (including all configuration)
 - `blobs/` - File attachments
 - `backups/` - Database backups
 
-### Manual Deployment (without Docker)
+### Running without Docker
 
 When running behind a reverse proxy, enable proxy header support:
 
