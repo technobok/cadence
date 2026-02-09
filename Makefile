@@ -1,4 +1,4 @@
-.PHONY: help sync install init-db run rundev worker check clean config-list config-set config-import config-export
+.PHONY: help sync install init-db run rundev worker check clean config-list config-set config-import config-export docker-up docker-down
 
 SHELL := /bin/bash
 VENV_DIR := $(or $(VIRTUAL_ENV),.venv)
@@ -69,6 +69,13 @@ check:
 	@$(RUFF) format src
 	@$(RUFF) check src --fix
 	@if [ -z "$$VIRTUAL_ENV" ]; then unset VIRTUAL_ENV; fi; $(TY) check src
+
+docker-up:
+	@mkdir -p instance
+	docker compose up -d
+
+docker-down:
+	docker compose down
 
 clean:
 	@echo "--- Cleaning up ---"
