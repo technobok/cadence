@@ -2,64 +2,9 @@
 # Usage: docker compose up -d
 
 services:
-  # Caddy reverse proxy with automatic HTTPS
-  # caddy:
-  #   image: caddy:2-alpine
-  #   container_name: cadence-caddy
-  #   restart: unless-stopped
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
-  #     - caddy-data:/data
-  #     - caddy-config:/config
-  #   depends_on:
-  #     - app
-
-  # Main Flask application
-  app:
-    build: .
-    container_name: cadence-app
-    restart: unless-stopped
-    # expose port directly if using and external caddy, then comment out caddy service and volumes
-    ports:
-      - "5001:5000"
-    # only expose (within Docker) if using this caddy service
-    # expose:
-    #   - "5000"
-    volumes:
-      - ./instance:/app/instance
-    environment:
-      - PYTHONUNBUFFERED=1
-    depends_on:
-      - init
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # Background notification worker
-  worker:
-    build: .
-    container_name: cadence-worker
-    restart: unless-stopped
-    command: ["python", "-m", "worker.notification_worker"]
-    volumes:
-      - ./instance:/app/instance
-    environment:
-      - PYTHONUNBUFFERED=1
-    depends_on:
-      - init
-
-  # One-time database initialization
   init:
     build: .
     container_name: cadence-init
-    volumes:
-      - ./instance:/app/instance
     command: >
       sh -c "
         if [ ! -f /app/instance/cadence.sqlite3 ]; then
@@ -69,24 +14,46 @@ services:
           echo 'Database already exists, skipping init'
         fi
       "
+    volumes:
+      - cadence-data:/app/instance
     restart: "no"
+    profiles:
+      - init
 
-  # Optional: Self-hosted ntfy server
-  # Uncomment to use instead of ntfy.sh
-  # ntfy:
-  #   image: binwiederhier/ntfy:latest
-  #   container_name: cadence-ntfy
-  #   restart: unless-stopped
-  #   command: serve
-  #   ports:
-  #     - "8080:80"
-  #   volumes:
-  #     - ntfy-cache:/var/cache/ntfy
-  #   environment:
-  #     - TZ=UTC
+  app:
+    build: .
+    container_name: cadence-app
+    volumes:
+      - cadence-data:/app/instance
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=${TZ:-UTC}
+    networks:
+      - platform-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
-#volumes:
-  # caddy-data:
-  # caddy-config:
-  # Uncomment if using self-hosted ntfy
-  # ntfy-cache:
+  worker:
+    build: .
+    container_name: cadence-worker
+    command: ["python", "-m", "worker.notification_worker"]
+    volumes:
+      - cadence-data:/app/instance
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=${TZ:-UTC}
+    networks:
+      - platform-net
+    restart: unless-stopped
+
+volumes:
+  cadence-data:
+
+networks:
+  platform-net:
+    external: true
