@@ -35,7 +35,7 @@
                 -
                 {% endif %}
             </td>
-            <td>{{ owners[task.owner_id].display_name or owners[task.owner_id].email if task.owner_id in owners else 'Unknown' }}</td>
+            <td>{{ owners.get(task.owner, 'Unknown') }}</td>
             <td>{{ task.due_date|localdate if task.due_date else '-' }}</td>
             <td>{{ task.created_at|localdate }}</td>
         </tr>

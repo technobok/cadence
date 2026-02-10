@@ -22,12 +22,12 @@
             <ul>
                 {% if g.user %}
                 <li><a href="{{ url_for('tasks.index') }}">Tasks</a></li>
-                {% if g.user.is_admin %}
+                {% if g.get('cadence_is_admin') %}
                 <li><a href="{{ url_for('admin.index') }}">Admin</a></li>
                 {% endif %}
                 {% endif %}
                 {% if g.user %}
-                <li><a href="{{ url_for('auth.settings') }}">{{ g.user.display_name or g.user.email }}</a></li>
+                <li><a href="{{ url_for('auth.settings') }}">{{ g.user.fullname or g.user.username }}</a></li>
                 <li><button type="button" class="outline secondary" onclick="location.href='{{ url_for('auth.logout') }}'">Logout</button></li>
                 {% else %}
                 <li><button type="button" onclick="location.href='{{ url_for('auth.login') }}'" class="outline">Login</button></li>

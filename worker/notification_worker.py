@@ -1,9 +1,11 @@
 """Background worker for sending notifications."""
 
 import logging
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -19,6 +21,31 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Gatekeeper client singleton for user lookups
+_gk_client: Any = None
+
+
+def _get_gk() -> Any:
+    """Get or create the GatekeeperClient instance for user lookups."""
+    global _gk_client
+    if _gk_client is not None:
+        return _gk_client
+
+    gk_db_path = os.environ.get("GATEKEEPER_DB")
+    if not gk_db_path:
+        logger.warning("GATEKEEPER_DB not set, cannot look up user emails")
+        return None
+
+    try:
+        from gatekeeper.client import GatekeeperClient
+
+        _gk_client = GatekeeperClient(db_path=gk_db_path)
+        logger.info("Gatekeeper client initialized for worker")
+        return _gk_client
+    except Exception as e:
+        logger.error(f"Failed to initialize Gatekeeper client: {e}")
+        return None
 
 
 def _get_config_value(key: str) -> str | int | bool | list[str]:
@@ -95,16 +122,16 @@ def process_notifications(
 ) -> int:
     """Process pending notifications. Returns count processed."""
     cursor = conn.cursor()
+    gk = _get_gk()
 
-    # Get pending notifications with user info
+    # Get pending notifications
     cursor.execute(
         """
-        SELECT n.id, n.uuid, n.user_id, n.task_id, n.channel, n.subject, n.body,
-               n.body_html, n.status, n.retries, u.email, u.ntfy_topic
-        FROM notification_queue n
-        JOIN user u ON n.user_id = u.id
-        WHERE n.status = 'pending' AND u.is_active = 1
-        ORDER BY n.created_at ASC
+        SELECT id, uuid, username, task_id, channel, subject, body,
+               body_html, status, retries
+        FROM notification_queue
+        WHERE status = 'pending'
+        ORDER BY created_at ASC
         LIMIT ?
         """,
         (batch_size,),
@@ -118,7 +145,7 @@ def process_notifications(
         (
             notif_id,
             notif_uuid,
-            user_id,
+            username,
             task_id,
             channel,
             subject,
@@ -126,16 +153,37 @@ def process_notifications(
             body_html,
             status,
             retries,
-            user_email,
-            user_ntfy_topic,
         ) = row
+
+        # Look up user info from gatekeeper
+        if not gk:
+            logger.warning(f"Cannot process notification {notif_id}: no gatekeeper client")
+            break
+
+        gk_user = gk.get_user(username)
+        if not gk_user or not gk_user.enabled:
+            logger.info(f"Skipping notification for disabled/unknown user: {username}")
+            # Mark as failed
+            now = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+            cursor.execute(
+                "UPDATE notification_queue SET status = 'failed', sent_at = ? WHERE id = ?",
+                (now, notif_id),
+            )
+            processed += 1
+            continue
 
         success = False
 
         try:
             if channel == "email":
-                success = send_email_notification(user_email, subject, body, body_html)
+                user_email = gk_user.email
+                if user_email:
+                    success = send_email_notification(user_email, subject, body, body_html)
+                else:
+                    logger.warning(f"User {username} has no email address")
+                    success = False
             elif channel == "ntfy":
+                user_ntfy_topic = gk.get_user_property(username, "cadence", "ntfy_topic")
                 if user_ntfy_topic:
                     # Extract click URL from body if present
                     click_url = None
@@ -153,8 +201,7 @@ def process_notifications(
                         click_url=click_url,
                     )
                 else:
-                    # No ntfy topic configured, mark as failed permanently
-                    logger.warning(f"User {user_id} has no ntfy topic configured")
+                    logger.warning(f"User {username} has no ntfy topic configured")
                     success = False
 
             # Update notification status

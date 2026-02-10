@@ -25,9 +25,11 @@ services:
     container_name: cadence-app
     volumes:
       - ./instance:/app/instance
+      - ${GATEKEEPER_DB_PATH:-../gatekeeper/instance/gatekeeper.sqlite3}:/data/gatekeeper.sqlite3:ro
     environment:
       - PYTHONUNBUFFERED=1
       - TZ=${TZ:-UTC}
+      - GATEKEEPER_DB=/data/gatekeeper.sqlite3
     networks:
       - platform-net
     restart: unless-stopped
@@ -44,9 +46,11 @@ services:
     command: ["python", "-m", "worker.notification_worker"]
     volumes:
       - ./instance:/app/instance
+      - ${GATEKEEPER_DB_PATH:-../gatekeeper/instance/gatekeeper.sqlite3}:/data/gatekeeper.sqlite3:ro
     environment:
       - PYTHONUNBUFFERED=1
       - TZ=${TZ:-UTC}
+      - GATEKEEPER_DB=/data/gatekeeper.sqlite3
     networks:
       - platform-net
     restart: unless-stopped

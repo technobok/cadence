@@ -1,178 +1,43 @@
-"""User model."""
+"""User property helpers backed by gatekeeper user_property (app='cadence')."""
 
-import uuid
-from dataclasses import dataclass
-from datetime import UTC, datetime
-
-from cadence.db import get_db, transaction
-
-# Column list for SELECT queries
-_USER_COLUMNS = (
-    "id, uuid, email, display_name, is_active, is_admin, "
-    "email_notifications, ntfy_topic, created_at, updated_at"
-)
+from typing import Any
 
 
-@dataclass
-class User:
-    id: int
-    uuid: str
-    email: str
-    display_name: str | None
-    is_active: bool
-    is_admin: bool
-    email_notifications: bool
-    ntfy_topic: str | None
-    created_at: str
-    updated_at: str
+def get_cadence_props(gk: Any, username: str) -> dict[str, str | None]:
+    """Get all cadence-specific properties for a user."""
+    return gk.get_user_properties(username, "cadence")
 
-    @staticmethod
-    def get_by_id(user_id: int) -> User | None:
-        """Get user by internal ID."""
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute(
-            f"SELECT {_USER_COLUMNS} FROM user WHERE id = ?",
-            (user_id,),
-        )
-        row = cursor.fetchone()
-        if row:
-            return User(*row)
-        return None
 
-    @staticmethod
-    def get_by_uuid(user_uuid: str) -> User | None:
-        """Get user by UUID (for external references)."""
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute(
-            f"SELECT {_USER_COLUMNS} FROM user WHERE uuid = ?",
-            (user_uuid,),
-        )
-        row = cursor.fetchone()
-        if row:
-            return User(*row)
-        return None
+def get_cadence_prop(gk: Any, username: str, key: str) -> str | None:
+    """Get a single cadence-specific property."""
+    return gk.get_user_property(username, "cadence", key)
 
-    @staticmethod
-    def get_by_email(email: str) -> User | None:
-        """Get user by email address."""
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute(
-            f"SELECT {_USER_COLUMNS} FROM user WHERE email = ?",
-            (email.lower(),),
-        )
-        row = cursor.fetchone()
-        if row:
-            return User(*row)
-        return None
 
-    @staticmethod
-    def create(email: str, display_name: str | None = None, is_admin: bool = False) -> User:
-        """Create a new user."""
-        now = datetime.now(UTC).isoformat()
-        user_uuid = str(uuid.uuid4())
+def set_cadence_prop(gk: Any, username: str, key: str, value: str | None) -> None:
+    """Set a single cadence-specific property."""
+    gk.set_user_property(username, "cadence", key, value)
 
-        with transaction() as cursor:
-            cursor.execute(
-                "INSERT INTO user (uuid, email, display_name, is_active, is_admin, "
-                "email_notifications, created_at, updated_at) VALUES (?, ?, ?, 1, ?, 1, ?, ?)",
-                (user_uuid, email.lower(), display_name, int(is_admin), now, now),
-            )
-            row = cursor.execute("SELECT last_insert_rowid()").fetchone()
-            user_id = int(row[0]) if row else 0
 
-        return User(
-            id=user_id,
-            uuid=user_uuid,
-            email=email.lower(),
-            display_name=display_name,
-            is_active=True,
-            is_admin=is_admin,
-            email_notifications=True,
-            ntfy_topic=None,
-            created_at=now,
-            updated_at=now,
-        )
+def is_admin(gk: Any, username: str) -> bool:
+    """Check if user is a cadence admin."""
+    return get_cadence_prop(gk, username, "is_admin") == "1"
 
-    @staticmethod
-    def get_or_create(email: str) -> tuple[User, bool]:
-        """Get existing user or create new one. Returns (user, created)."""
-        user = User.get_by_email(email)
-        if user:
-            return user, False
-        return User.create(email), True
 
-    def update(
-        self,
-        display_name: str | None = None,
-        email_notifications: bool | None = None,
-        ntfy_topic: str | None = None,
-        is_active: bool | None = None,
-        is_admin: bool | None = None,
-    ) -> None:
-        """Update user fields."""
-        now = datetime.now(UTC).isoformat()
+def get_display_name(gk: Any, username: str, fallback_fullname: str = "") -> str:
+    """Get user's display name, falling back to gatekeeper fullname."""
+    dn = get_cadence_prop(gk, username, "display_name")
+    return dn or fallback_fullname or username
 
-        updates = []
-        params = []
 
-        if display_name is not None:
-            updates.append("display_name = ?")
-            params.append(display_name)
-            self.display_name = display_name
+def get_email_notifications(gk: Any, username: str) -> bool:
+    """Check if email notifications are enabled (default: True)."""
+    val = get_cadence_prop(gk, username, "email_notifications")
+    if val is None:
+        return True  # default enabled
+    return val == "1"
 
-        if email_notifications is not None:
-            updates.append("email_notifications = ?")
-            params.append(int(email_notifications))
-            self.email_notifications = email_notifications
 
-        if ntfy_topic is not None:
-            updates.append("ntfy_topic = ?")
-            params.append(ntfy_topic)
-            self.ntfy_topic = ntfy_topic
-
-        if is_active is not None:
-            updates.append("is_active = ?")
-            params.append(int(is_active))
-            self.is_active = is_active
-
-        if is_admin is not None:
-            updates.append("is_admin = ?")
-            params.append(int(is_admin))
-            self.is_admin = is_admin
-
-        if updates:
-            updates.append("updated_at = ?")
-            params.append(now)
-            params.append(self.id)
-
-            with transaction() as cursor:
-                cursor.execute(
-                    f"UPDATE user SET {', '.join(updates)} WHERE id = ?",
-                    params,
-                )
-            self.updated_at = now
-
-    @staticmethod
-    def get_all(include_inactive: bool = False) -> list[User]:
-        """Get all users."""
-        db = get_db()
-        cursor = db.cursor()
-
-        if include_inactive:
-            cursor.execute(f"SELECT {_USER_COLUMNS} FROM user ORDER BY email")
-        else:
-            cursor.execute(f"SELECT {_USER_COLUMNS} FROM user WHERE is_active = 1 ORDER BY email")
-
-        return [User(*row) for row in cursor.fetchall()]  # type: ignore[arg-type]
-
-    @staticmethod
-    def count() -> int:
-        """Count total users."""
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute("SELECT COUNT(*) FROM user")
-        row = cursor.fetchone()
-        return int(row[0]) if row else 0
+def get_ntfy_topic(gk: Any, username: str) -> str | None:
+    """Get user's ntfy topic, or None if not configured."""
+    topic = get_cadence_prop(gk, username, "ntfy_topic")
+    return topic if topic else None

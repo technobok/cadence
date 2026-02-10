@@ -8,7 +8,7 @@ from cadence.models.tag import LIGHT_TAG_COLORS, TAG_COLORS, Tag, is_light_color
 from cadence.models.task import VALID_STATUSES, Task
 from cadence.models.task_tag import TaskTag
 from cadence.models.task_watcher import TaskWatcher
-from cadence.models.user import User
+from cadence.models import user as user_helpers
 
 __all__ = [
     "Activity",
@@ -22,7 +22,7 @@ __all__ = [
     "Task",
     "TaskTag",
     "TaskWatcher",
-    "User",
     "VALID_STATUSES",
     "is_light_color",
+    "user_helpers",
 ]

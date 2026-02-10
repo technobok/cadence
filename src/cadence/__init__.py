@@ -8,10 +8,11 @@ from zoneinfo import ZoneInfo
 
 import apsw
 import mistune
-from flask import Flask, render_template, request
+from flask import Flask, g, render_template, request
 from markupsafe import Markup
 
 from cadence.config import KEY_MAP, REGISTRY, parse_value
+from cadence.models import user_helpers
 
 
 def get_user_timezone() -> ZoneInfo:
@@ -73,6 +74,21 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     from cadence.db import close_db
 
     app.teardown_appcontext(close_db)
+
+    # Gatekeeper client integration
+    _init_gatekeeper(app)
+
+    # Set cadence_is_admin on g after gatekeeper sets g.user
+    @app.before_request
+    def _set_cadence_admin() -> None:
+        if g.get("user"):
+            gk = app.config.get("GATEKEEPER_CLIENT")
+            if gk:
+                g.cadence_is_admin = user_helpers.is_admin(gk, g.user.username)
+            else:
+                g.cadence_is_admin = False
+        else:
+            g.cadence_is_admin = False
 
     # Jinja filters for date formatting
     @app.template_filter("localdate")
@@ -144,6 +160,29 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return render_template("index.html")
 
     return app
+
+
+def _init_gatekeeper(app: Flask) -> None:
+    """Initialize Gatekeeper client for SSO authentication."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    gk_db_path = os.environ.get("GATEKEEPER_DB")
+    if not gk_db_path:
+        logger.info("GATEKEEPER_DB not set, authentication disabled")
+        return
+
+    try:
+        from gatekeeper.client import GatekeeperClient
+        from gatekeeper.client.flask_integration import setup_flask_integration
+
+        client = GatekeeperClient(db_path=gk_db_path)
+        app.config["GATEKEEPER_CLIENT"] = client
+        setup_flask_integration(app, client)
+        logger.info("Gatekeeper client initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Gatekeeper client: {e}")
 
 
 def _load_config_from_db(app: Flask) -> None:

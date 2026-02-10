@@ -13,7 +13,7 @@ class Comment:
     id: int
     uuid: str
     task_id: int
-    user_id: int
+    username: str
     content: str
     created_at: str
     updated_at: str
@@ -25,7 +25,7 @@ class Comment:
             id=int(row[0]),
             uuid=str(row[1]),
             task_id=int(row[2]),
-            user_id=int(row[3]),
+            username=str(row[3]),
             content=str(row[4]),
             created_at=str(row[5]),
             updated_at=str(row[6]),
@@ -37,7 +37,7 @@ class Comment:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, task_id, user_id, content, created_at, updated_at "
+            "SELECT id, uuid, task_id, username, content, created_at, updated_at "
             "FROM comment WHERE id = ?",
             (comment_id,),
         )
@@ -52,7 +52,7 @@ class Comment:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, task_id, user_id, content, created_at, updated_at "
+            "SELECT id, uuid, task_id, username, content, created_at, updated_at "
             "FROM comment WHERE uuid = ?",
             (comment_uuid,),
         )
@@ -62,16 +62,16 @@ class Comment:
         return None
 
     @staticmethod
-    def create(task_id: int, user_id: int, content: str) -> Comment:
+    def create(task_id: int, username: str, content: str) -> Comment:
         """Create a new comment."""
         now = datetime.now(UTC).isoformat()
         comment_uuid = str(uuid.uuid4())
 
         with transaction() as cursor:
             cursor.execute(
-                "INSERT INTO comment (uuid, task_id, user_id, content, created_at, updated_at) "
+                "INSERT INTO comment (uuid, task_id, username, content, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (comment_uuid, task_id, user_id, content, now, now),
+                (comment_uuid, task_id, username, content, now, now),
             )
             row = cursor.execute("SELECT last_insert_rowid()").fetchone()
             comment_id = int(row[0]) if row else 0
@@ -80,7 +80,7 @@ class Comment:
             id=comment_id,
             uuid=comment_uuid,
             task_id=task_id,
-            user_id=user_id,
+            username=username,
             content=content,
             created_at=now,
             updated_at=now,
@@ -92,7 +92,7 @@ class Comment:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, task_id, user_id, content, created_at, updated_at "
+            "SELECT id, uuid, task_id, username, content, created_at, updated_at "
             "FROM comment WHERE task_id = ? ORDER BY created_at ASC",
             (task_id,),
         )

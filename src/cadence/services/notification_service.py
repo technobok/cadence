@@ -1,45 +1,45 @@
 """Notification service for queuing task notifications."""
 
-import mistune
+from typing import Any
 
-from cadence.models import Activity, Notification, Task, TaskWatcher, User
+import mistune
+from flask import current_app
+
+from cadence.models import Activity, Notification, Task, TaskWatcher, user_helpers
 
 # Markdown renderer for notifications
 _md = mistune.create_markdown(escape=True, plugins=["strikethrough"])
 
 
-def get_recipients(task: Task, actor_id: int | None) -> list[User]:
+def _gk() -> Any:
+    """Get the GatekeeperClient instance."""
+    return current_app.config.get("GATEKEEPER_CLIENT")
+
+
+def get_recipients(task: Task, actor_username: str | None) -> list[str]:
     """
-    Get users who should be notified about a task change.
+    Get usernames who should be notified about a task change.
 
     Recipients are:
     - Task owner
     - All watchers
     Excluding:
     - The actor (person who made the change)
-    - Inactive users
     """
-    recipient_ids: set[int] = set()
+    recipient_usernames: set[str] = set()
 
     # Add task owner
-    recipient_ids.add(task.owner_id)
+    recipient_usernames.add(task.owner)
 
     # Add watchers
-    watcher_ids = TaskWatcher.get_watcher_user_ids(task.id)
-    recipient_ids.update(watcher_ids)
+    watcher_usernames = TaskWatcher.get_watcher_usernames(task.id)
+    recipient_usernames.update(watcher_usernames)
 
     # Remove actor
-    if actor_id is not None:
-        recipient_ids.discard(actor_id)
+    if actor_username is not None:
+        recipient_usernames.discard(actor_username)
 
-    # Fetch users and filter out inactive
-    recipients = []
-    for user_id in recipient_ids:
-        user = User.get_by_id(user_id)
-        if user and user.is_active:
-            recipients.append(user)
-
-    return recipients
+    return list(recipient_usernames)
 
 
 def _render_markdown(text: str) -> str:
@@ -69,7 +69,7 @@ def _wrap_html_email(content: str, task_url: str) -> str:
 def format_notification(
     activity: Activity,
     task: Task,
-    actor: User | None,
+    actor_name: str,
     base_url: str,
 ) -> tuple[str, str, str]:
     """
@@ -79,7 +79,6 @@ def format_notification(
         (subject, body_text, body_html) tuple
     """
     task_url = f"{base_url.rstrip('/')}/tasks/{task.uuid}"
-    actor_name = actor.display_name or actor.email if actor else "Someone"
 
     action = activity.action
     details = activity.details or {}
@@ -108,11 +107,9 @@ def format_notification(
 
     elif action == "commented":
         content = details.get("content", "")
-        # Plain text: truncate long comments
         content_truncated = content[:200] + "..." if len(content) > 200 else content
         subject = f"[Cadence] Comment on: {task.title}"
         body = f"{actor_name} commented:\n\n{content_truncated}\n\n{task_url}"
-        # HTML: render full markdown
         html_content = (
             f"<p><strong>{actor_name}</strong> commented:</p>"
             f'<blockquote style="margin: 16px 0; padding: 12px 16px; '
@@ -122,11 +119,9 @@ def format_notification(
 
     elif action == "comment_edited":
         content = details.get("content", "")
-        # Plain text: truncate long comments
         content_truncated = content[:200] + "..." if len(content) > 200 else content
         subject = f"[Cadence] Comment edited: {task.title}"
         body = f"{actor_name} edited their comment:\n\n{content_truncated}\n\n{task_url}"
-        # HTML: render full markdown
         html_content = (
             f"<p><strong>{actor_name}</strong> edited their comment:</p>"
             f'<blockquote style="margin: 16px 0; padding: 12px 16px; '
@@ -171,24 +166,35 @@ def queue_notifications(
     if activity.skip_notification:
         return 0
 
-    # Get actor
-    actor = User.get_by_id(activity.user_id) if activity.user_id else None
+    gk = _gk()
+
+    # Get actor display name
+    actor_name = "Someone"
+    if activity.username and gk:
+        gk_user = gk.get_user(activity.username)
+        actor_name = user_helpers.get_display_name(
+            gk, activity.username, gk_user.fullname if gk_user else ""
+        )
 
     # Get recipients
-    recipients = get_recipients(task, activity.user_id)
+    recipients = get_recipients(task, activity.username)
 
     if not recipients:
         return 0
 
     # Format notification
-    subject, body, body_html = format_notification(activity, task, actor, base_url)
+    subject, body, body_html = format_notification(activity, task, actor_name, base_url)
 
     count = 0
-    for user in recipients:
+    for username in recipients:
+        # Check user preferences via gatekeeper user_property
+        email_notifications = user_helpers.get_email_notifications(gk, username) if gk else True
+        ntfy_topic = user_helpers.get_ntfy_topic(gk, username) if gk else None
+
         # Queue email notification if user has it enabled
-        if user.email_notifications:
+        if email_notifications:
             Notification.create(
-                user_id=user.id,
+                username=username,
                 channel="email",
                 subject=subject,
                 body=body,
@@ -198,9 +204,9 @@ def queue_notifications(
             count += 1
 
         # Queue ntfy notification if user has a topic configured
-        if user.ntfy_topic:
+        if ntfy_topic:
             Notification.create(
-                user_id=user.id,
+                username=username,
                 channel="ntfy",
                 subject=subject,
                 body=body,

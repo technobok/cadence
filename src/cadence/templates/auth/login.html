@@ -8,24 +8,9 @@
         <h1>Login to Cadence</h1>
     </header>
 
-    <form method="post">
-        <label for="email">
-            Email Address
-            <input type="email" id="email" name="email"
-                   placeholder="you@example.com"
-                   required autofocus>
-        </label>
-
-        <label>
-            <input type="checkbox" name="trust" value="1" checked>
-            Trust this device (stay logged in for 1 year)
-        </label>
-
-        <button type="submit">Send Login Link</button>
-    </form>
-
-    <footer>
-        <small>We'll email you a link to log in. No password needed.</small>
-    </footer>
+    {% if not login_url %}
+    <p>Login is not configured.</p>
+    <p>Set <code>GATEKEEPER_DB</code> environment variable and <code>server.login_url</code> in the Gatekeeper database to enable SSO login.</p>
+    {% endif %}
 </article>
 {% endblock %}

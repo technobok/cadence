@@ -12,7 +12,7 @@ from cadence.db import get_db, transaction
 class Notification:
     id: int
     uuid: str
-    user_id: int
+    username: str
     task_id: int | None
     channel: str  # 'email' or 'ntfy'
     subject: str
@@ -29,7 +29,7 @@ class Notification:
         return Notification(
             id=int(row[0]),
             uuid=str(row[1]),
-            user_id=int(row[2]),
+            username=str(row[2]),
             task_id=int(row[3]) if row[3] is not None else None,
             channel=str(row[4]),
             subject=str(row[5]),
@@ -43,7 +43,7 @@ class Notification:
 
     @staticmethod
     def create(
-        user_id: int,
+        username: str,
         channel: str,
         subject: str,
         body: str,
@@ -57,9 +57,9 @@ class Notification:
         with transaction() as cursor:
             cursor.execute(
                 "INSERT INTO notification_queue "
-                "(uuid, user_id, task_id, channel, subject, body, body_html, status, retries, created_at) "
+                "(uuid, username, task_id, channel, subject, body, body_html, status, retries, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)",
-                (notification_uuid, user_id, task_id, channel, subject, body, body_html, now),
+                (notification_uuid, username, task_id, channel, subject, body, body_html, now),
             )
             row = cursor.execute("SELECT last_insert_rowid()").fetchone()
             notification_id = int(row[0]) if row else 0
@@ -67,7 +67,7 @@ class Notification:
         return Notification(
             id=notification_id,
             uuid=notification_uuid,
-            user_id=user_id,
+            username=username,
             task_id=task_id,
             channel=channel,
             subject=subject,
@@ -85,7 +85,7 @@ class Notification:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, user_id, task_id, channel, subject, body, body_html, "
+            "SELECT id, uuid, username, task_id, channel, subject, body, body_html, "
             "status, retries, created_at, sent_at "
             "FROM notification_queue "
             "WHERE status = 'pending' "
@@ -100,7 +100,7 @@ class Notification:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, user_id, task_id, channel, subject, body, body_html, "
+            "SELECT id, uuid, username, task_id, channel, subject, body, body_html, "
             "status, retries, created_at, sent_at "
             "FROM notification_queue WHERE id = ?",
             (notification_id,),

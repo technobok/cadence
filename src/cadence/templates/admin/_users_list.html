@@ -6,7 +6,7 @@
    hx-swap="innerHTML">
     {{ label }}
     {% if sort_by == field %}
-    {{ '▲' if sort_dir == 'asc' else '▼' }}
+    {{ '&#9650;' if sort_dir == 'asc' else '&#9660;' }}
     {% endif %}
 </a>
 {% endmacro %}
@@ -14,11 +14,9 @@
 <table>
     <thead>
         <tr>
-            <th>{{ sort_link('email', 'Email') }}</th>
+            <th>{{ sort_link('username', 'Username') }}</th>
             <th>{{ sort_link('name', 'Display Name') }}</th>
             <th>{{ sort_link('admin', 'Admin') }}</th>
-            <th>{{ sort_link('active', 'Active') }}</th>
-            <th>{{ sort_link('created', 'Created') }}</th>
             <th>Actions</th>
         </tr>
     </thead>

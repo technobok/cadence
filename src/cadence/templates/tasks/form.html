@@ -2,7 +2,7 @@
 
 {% block title %}{{ 'Edit Task' if task else 'New Task' }} - Cadence{% endblock %}
 
-{% if task and g.user.is_admin and all_users %}
+{% if task and g.get('cadence_is_admin') and all_users %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tom-select.min.css') }}">
 {% endblock %}
@@ -30,17 +30,17 @@
             <input type="date" id="due_date" name="due_date" value="{{ due_date or '' }}">
         </label>
 
-        {% if task and g.user.is_admin and all_users %}
-        <label for="owner_id">
+        {% if task and g.get('cadence_is_admin') and all_users %}
+        <label for="owner">
             Owner
-            <select id="owner_id" name="owner_id" placeholder="Search users..."></select>
+            <select id="owner" name="owner" placeholder="Search users..."></select>
         </label>
         <script type="application/json" id="owner-data">
         {
-            "currentOwnerId": {{ task.owner_id }},
+            "currentOwnerId": "{{ task.owner }}",
             "users": [
                 {% for user in all_users %}{% if not loop.first %},{% endif %}
-                {"id": {{ user.id }}, "text": "{{ (user.display_name or user.email)|e }}", "email": "{{ user.email|e }}"}
+                {"id": "{{ user.username|e }}", "text": "{{ user.display_name|e }}", "email": "{{ user.email|e }}"}
                 {% endfor %}
             ]
         }
@@ -67,7 +67,7 @@
 </article>
 {% endblock %}
 
-{% if task and g.user.is_admin and all_users %}
+{% if task and g.get('cadence_is_admin') and all_users %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='vendor/tom-select.min.js') }}"></script>
 <script>
@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    var selectEl = document.getElementById('owner_id');
+    var selectEl = document.getElementById('owner');
     if (!selectEl) return;
 
     new TomSelect(selectEl, {

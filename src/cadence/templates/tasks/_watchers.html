@@ -2,20 +2,20 @@
 
 {% if can_manage_watchers %}
 <div class="watchers-control">
-    <select id="watchers-select" name="user_ids" multiple placeholder="Type to add..."></select>
+    <select id="watchers-select" name="usernames" multiple placeholder="Type to add..."></select>
 </div>
 <script type="application/json" id="watchers-data">
 {
     "watchers": [
-        {% set owner_watcher = watchers|selectattr('id', 'eq', task.owner_id)|first %}
-        {% if owner_watcher %}{"id": {{ owner_watcher.id }}, "text": "{{ (owner_watcher.display_name or owner_watcher.email)|e }}"}{% endif %}
-        {% for w in watchers if w.id != task.owner_id %}{% if owner_watcher or not loop.first %},{% endif %}
-        {"id": {{ w.id }}, "text": "{{ (w.display_name or w.email)|e }}"}{% endfor %}
+        {% set owner_watcher = watchers|selectattr('username', 'eq', task.owner)|first %}
+        {% if owner_watcher %}{"id": "{{ owner_watcher.username|e }}", "text": "{{ owner_watcher.display_name|e }}"}{% endif %}
+        {% for w in watchers if w.username != task.owner %}{% if owner_watcher or not loop.first %},{% endif %}
+        {"id": "{{ w.username|e }}", "text": "{{ w.display_name|e }}"}{% endfor %}
     ],
     "addUrl": "{{ url_for('tasks.add_watcher', task_uuid=task.uuid) }}",
-    "removeUrlBase": "{{ url_for('tasks.remove_watcher', task_uuid=task.uuid, user_id=0)|replace('/0/', '/{id}/') }}",
+    "removeUrlBase": "{{ url_for('tasks.remove_watcher', task_uuid=task.uuid, username='__USERNAME__')|replace('__USERNAME__', '{id}') }}",
     "searchUrl": "{{ url_for('tasks.search_users', task_uuid=task.uuid) }}",
-    "ownerId": {{ task.owner_id }}
+    "ownerId": "{{ task.owner }}"
 }
 </script>
 {% else %}
@@ -23,8 +23,8 @@
 <ul class="watcher-list compact">
     {% for w in watchers %}
     <li>
-        {{ w.display_name or w.email }}
-        {% if w.id == task.owner_id %}<small>(owner)</small>{% endif %}
+        {{ w.display_name }}
+        {% if w.username == task.owner %}<small>(owner)</small>{% endif %}
     </li>
     {% endfor %}
 </ul>

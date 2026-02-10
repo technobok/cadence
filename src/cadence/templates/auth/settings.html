@@ -15,7 +15,7 @@
             <label for="display_name">
                 Display Name
                 <input type="text" id="display_name" name="display_name"
-                       value="{{ g.user.display_name or '' }}" required>
+                       value="{{ display_name or '' }}" required>
             </label>
             <label>
                 Email
@@ -33,7 +33,7 @@
         <p>Receive email notifications when tasks you watch are updated.</p>
         <form method="post">
             <input type="hidden" name="action" value="toggle_email">
-            {% if g.user.email_notifications %}
+            {% if email_notifications %}
             <p><strong>Status:</strong> Enabled</p>
             <button type="submit" class="outline secondary">Disable Email Notifications</button>
             {% else %}
@@ -49,10 +49,10 @@
         <h3>Push Notifications</h3>
         <p>Get instant push notifications on your phone or desktop using <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a>.</p>
 
-        {% if g.user.ntfy_topic %}
+        {% if ntfy_topic %}
         <div class="notification-enabled">
             <p><strong>Status:</strong> Enabled</p>
-            <p><strong>Your topic:</strong> <code>{{ g.user.ntfy_topic }}</code></p>
+            <p><strong>Your topic:</strong> <code>{{ ntfy_topic }}</code></p>
             <p><strong>Subscribe URL:</strong></p>
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 16px;">
                 <input type="text" value="{{ ntfy_subscribe_url }}" readonly id="ntfy-url"
@@ -64,7 +64,7 @@
                 <ol>
                     <li>Install the ntfy app on your <a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener">Android</a> or <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener">iOS</a> device</li>
                     <li>Open the app and tap "+" to add a subscription</li>
-                    <li>Enter your topic: <code>{{ g.user.ntfy_topic }}</code></li>
+                    <li>Enter your topic: <code>{{ ntfy_topic }}</code></li>
                     <li>{% if 'ntfy.sh' not in ntfy_server %}Set the server to: <code>{{ ntfy_server }}</code>{% else %}Use the default server (ntfy.sh){% endif %}</li>
                     <li>You'll now receive push notifications for task updates</li>
                 </ol>

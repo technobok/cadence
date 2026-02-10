@@ -236,38 +236,70 @@ def init_db_command() -> None:
 
 
 @main.command("make-admin")
-@click.argument("email")
-def make_admin_command(email: str) -> None:
-    """Grant admin privileges to a user by email."""
+@click.argument("username")
+def make_admin_command(username: str) -> None:
+    """Grant cadence admin privileges to a user by username."""
     app = _make_app()
     with app.app_context():
-        from cadence.models import User
+        from cadence.models import user_helpers
 
-        user = User.get_by_email(email)
-        if not user:
-            user = User.create(email=email, is_admin=True)
-            click.echo(f"Created admin user: {email}")
-        elif user.is_admin:
-            click.echo(f"User {email} is already an admin.")
+        gk = app.config.get("GATEKEEPER_CLIENT")
+        if not gk:
+            click.echo("Gatekeeper not configured.", err=True)
+            sys.exit(1)
+
+        gk_user = gk.get_user(username)
+        if not gk_user:
+            click.echo(f"User '{username}' not found in Gatekeeper.", err=True)
+            sys.exit(1)
+
+        if user_helpers.is_admin(gk, username):
+            click.echo(f"User '{username}' is already a cadence admin.")
         else:
-            user.update(is_admin=True)
-            click.echo(f"Granted admin privileges to: {email}")
+            user_helpers.set_cadence_prop(gk, username, "is_admin", "1")
+            click.echo(f"Granted cadence admin privileges to: {username}")
 
 
 @main.command("list-users")
 def list_users_command() -> None:
-    """List all users."""
+    """List all users known to Cadence."""
     app = _make_app()
     with app.app_context():
-        from cadence.models import User
+        from cadence.models import user_helpers
 
-        users = User.get_all(include_inactive=True)
-        if not users:
+        gk = app.config.get("GATEKEEPER_CLIENT")
+        if not gk:
+            click.echo("Gatekeeper not configured.", err=True)
+            sys.exit(1)
+
+        # Get all usernames that have interacted with Cadence
+        from cadence.db import get_db
+
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("""
+            SELECT DISTINCT username FROM (
+                SELECT owner AS username FROM task
+                UNION SELECT username FROM comment
+                UNION SELECT username FROM task_watcher
+                UNION SELECT username FROM activity_log WHERE username IS NOT NULL
+                UNION SELECT uploaded_by AS username FROM attachment
+            )
+            ORDER BY username
+        """)
+        usernames = [str(row[0]) for row in cursor.fetchall()]
+
+        if not usernames:
             click.echo("No users found.")
             return
-        click.echo(f"{'Email':<40} {'Admin':<8} {'Active':<8}")
-        click.echo("-" * 56)
-        for user in users:
-            admin = "Yes" if user.is_admin else "No"
-            active = "Yes" if user.is_active else "No"
-            click.echo(f"{user.email:<40} {admin:<8} {active:<8}")
+
+        click.echo(f"{'Username':<25} {'Name':<30} {'Admin':<8} {'Enabled':<8}")
+        click.echo("-" * 71)
+        for uname in usernames:
+            gk_user = gk.get_user(uname)
+            display_name = user_helpers.get_display_name(
+                gk, uname, gk_user.fullname if gk_user else ""
+            )
+            admin = "Yes" if user_helpers.is_admin(gk, uname) else "No"
+            enabled = "Yes" if (gk_user and gk_user.enabled) else "No"
+            click.echo(f"{uname:<25} {display_name:<30} {admin:<8} {enabled:<8}")

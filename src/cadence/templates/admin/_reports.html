@@ -39,7 +39,7 @@
         <tbody>
             {% for user, count in user_activity %}
             <tr>
-                <td>{{ user.display_name or user.email if user else 'Unknown' }}</td>
+                <td>{{ user if user else 'Unknown' }}</td>
                 <td>{{ count }}</td>
             </tr>
             {% endfor %}
@@ -65,8 +65,7 @@
             <tr>
                 <td>{{ activity.logged_at|localdate }}</td>
                 <td>
-                    {% set user = users.get(activity.user_id) %}
-                    {{ user.display_name or user.email if user else '-' }}
+                    {{ users.get(activity.username, '-') }}
                 </td>
                 <td>{{ activity.action|replace('_', ' ')|title }}</td>
                 <td>

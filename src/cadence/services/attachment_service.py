@@ -18,7 +18,7 @@ def get_blob_path(sha256_hash: str) -> Path:
 def save_uploaded_file(
     file: FileStorage,
     task_id: int,
-    uploaded_by: int,
+    uploaded_by: str,
 ) -> Attachment:
     """
     Save an uploaded file with deduplication.

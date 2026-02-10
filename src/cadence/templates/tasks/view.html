@@ -12,7 +12,7 @@
         <hgroup>
             <h1>{{ task.title }}</h1>
             <p>
-                Created by {{ owner.display_name or owner.email if owner else 'Unknown' }}
+                Created by {{ owner or 'Unknown' }}
                 on {{ task.created_at|localdate }}
                 {% if task.is_private %}<small>(private)</small>{% endif %}
             </p>
@@ -20,16 +20,16 @@
     </header>
 
     <nav class="task-toolbar">
-        {% if task.owner_id == g.user.id or g.user.is_admin %}
+        {% if task.owner == g.user.username or g.get('cadence_is_admin') %}
         <button type="button" class="outline" onclick="location.href='{{ url_for('tasks.edit', task_uuid=task.uuid) }}'">Edit</button>
         {% endif %}
-        {% if (task.owner_id == g.user.id or g.user.is_admin) and allowed_transitions %}
+        {% if (task.owner == g.user.username or g.get('cadence_is_admin')) and allowed_transitions %}
         <button type="button" class="outline" onclick="document.getElementById('status-dialog').showModal()">Status</button>
         {% endif %}
         <button type="button" class="outline" onclick="openCommentDialog()">Comment</button>
         <button type="button" class="outline" onclick="document.getElementById('upload-dialog').showModal()">Upload</button>
         <span id="watch-button">{% include "tasks/_watch_button.html" %}</span>
-        {% if g.user.is_admin %}
+        {% if g.get('cadence_is_admin') %}
         <button type="button" class="outline contrast" onclick="document.getElementById('delete-dialog').showModal()">Delete...</button>
         {% endif %}
     </nav>
@@ -72,7 +72,7 @@
 </article>
 
 <!-- Status Dialog -->
-{% if (task.owner_id == g.user.id or g.user.is_admin) and allowed_transitions %}
+{% if (task.owner == g.user.username or g.get('cadence_is_admin')) and allowed_transitions %}
 <dialog id="status-dialog">
     <article>
         <header>
@@ -232,7 +232,7 @@ function closeCommentDialog() {
 </dialog>
 
 <!-- Delete Dialog -->
-{% if g.user.is_admin %}
+{% if g.get('cadence_is_admin') %}
 <dialog id="delete-dialog">
     <article>
         <header>
@@ -306,7 +306,7 @@ function initWatchersTomSelect() {
             item: function(data, escape) {
                 var isOwner = data.id == config.ownerId;
                 var cls = isOwner ? 'ts-item-badge owner' : 'ts-item-badge';
-                return '<div class="' + cls + '" data-user-id="' + escape(data.id) + '">' +
+                return '<div class="' + cls + '" data-username="' + escape(data.id) + '">' +
                     escape(data.text) +
                 '</div>';
             }
@@ -323,7 +323,7 @@ function initWatchersTomSelect() {
 
             // Add watcher via API
             var formData = new FormData();
-            formData.append('user_id', value);
+            formData.append('username', value);
 
             fetch(config.addUrl, {
                 method: 'POST',
@@ -361,7 +361,7 @@ function initWatchersTomSelect() {
             // Lock owner item from being removed
             var self = this;
             setTimeout(function() {
-                var ownerItem = self.control.querySelector('[data-user-id="' + config.ownerId + '"]');
+                var ownerItem = self.control.querySelector('[data-username="' + config.ownerId + '"]');
                 if (ownerItem) {
                     var removeBtn = ownerItem.querySelector('.remove');
                     if (removeBtn) removeBtn.style.display = 'none';

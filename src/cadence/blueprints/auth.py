@@ -1,11 +1,8 @@
-"""Authentication blueprint with magic link login."""
+"""Authentication blueprint using Gatekeeper SSO."""
 
 import functools
-import hashlib
 import secrets
-import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from flask import (
@@ -16,132 +13,13 @@ from flask import (
     redirect,
     render_template,
     request,
-    session,
     url_for,
 )
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.wrappers import Response
 
-from cadence.db import get_db, transaction
-from cadence.models import User
-from cadence.services.email_service import send_magic_link
+from cadence.models import user_helpers
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
-
-
-def get_serializer() -> URLSafeTimedSerializer:
-    """Get the serializer for magic link tokens."""
-    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
-
-
-def generate_magic_link(email: str) -> str:
-    """Generate a magic link URL for the given email."""
-    serializer = get_serializer()
-    token = serializer.dumps(email, salt="magic-link")
-    return url_for("auth.verify", token=token, _external=True)
-
-
-def verify_magic_token(token: str) -> str | None:
-    """
-    Verify a magic link token and return the email if valid.
-    Returns None if invalid or expired.
-    """
-    serializer = get_serializer()
-    max_age = current_app.config.get("MAGIC_LINK_EXPIRY_SECONDS", 3600)
-
-    try:
-        email = serializer.loads(token, salt="magic-link", max_age=max_age)
-        return email
-    except (BadSignature, SignatureExpired):
-        return None
-
-
-def create_trusted_session(user_id: int, device_name: str | None = None) -> str:
-    """
-    Create a persistent trusted session for the user.
-    Returns the plain token to store in cookie.
-    """
-    token = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-    session_uuid = str(uuid.uuid4())
-    now = datetime.now(UTC).isoformat()
-
-    days = current_app.config.get("TRUSTED_SESSION_DAYS", 365)
-    expires_at = (datetime.now(UTC) + timedelta(days=days)).isoformat()
-
-    with transaction() as cursor:
-        cursor.execute(
-            "INSERT INTO session (uuid, user_id, token_hash, device_name, "
-            "is_trusted, created_at, expires_at, last_used_at) "
-            "VALUES (?, ?, ?, ?, 1, ?, ?, ?)",
-            (session_uuid, user_id, token_hash, device_name, now, expires_at, now),
-        )
-
-    return token
-
-
-def verify_trusted_session(token: str) -> User | None:
-    """
-    Verify a trusted session token.
-    Returns User if valid, None otherwise.
-    """
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute(
-        "SELECT user_id, expires_at FROM session WHERE token_hash = ? AND is_trusted = 1",
-        (token_hash,),
-    )
-    row = cursor.fetchone()
-
-    if not row:
-        return None
-
-    user_id, expires_at = row
-
-    if datetime.fromisoformat(expires_at) < datetime.now(UTC):
-        # Session expired, delete it
-        cursor.execute("DELETE FROM session WHERE token_hash = ?", (token_hash,))
-        return None
-
-    # Update last_used_at
-    now = datetime.now(UTC).isoformat()
-    cursor.execute(
-        "UPDATE session SET last_used_at = ? WHERE token_hash = ?",
-        (now, token_hash),
-    )
-
-    return User.get_by_id(user_id)
-
-
-def invalidate_trusted_session(token: str) -> None:
-    """Invalidate a trusted session by its token."""
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM session WHERE token_hash = ?", (token_hash,))
-
-
-@bp.before_app_request
-def load_logged_in_user() -> None:
-    """Load user from session or trusted cookie before each request."""
-    user_id = session.get("user_id")
-
-    if user_id is None:
-        # Check for trusted session cookie
-        trusted_token = request.cookies.get("cadence_session")
-        if trusted_token:
-            user = verify_trusted_session(trusted_token)
-            if user:
-                session["user_id"] = user.id
-                g.user = user
-                return
-
-    if user_id is None:
-        g.user = None
-    else:
-        g.user = User.get_by_id(user_id)
 
 
 def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
@@ -149,7 +27,7 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(view)
     def wrapped_view(*args: Any, **kwargs: Any) -> Any:
-        if g.user is None:
+        if g.get("user") is None:
             return redirect(url_for("auth.login", next=request.url))
         return view(*args, **kwargs)
 
@@ -157,13 +35,14 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
-    """Decorator that requires admin role."""
+    """Decorator that requires cadence admin role."""
 
     @functools.wraps(view)
     def wrapped_view(*args: Any, **kwargs: Any) -> Any:
-        if g.user is None:
+        if g.get("user") is None:
             return redirect(url_for("auth.login", next=request.url))
-        if not g.user.is_admin:
+        gk = current_app.config.get("GATEKEEPER_CLIENT")
+        if not user_helpers.is_admin(gk, g.user.username):
             flash("Admin access required.", "error")
             return redirect(url_for("index"))
         return view(*args, **kwargs)
@@ -171,93 +50,68 @@ def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped_view
 
 
-@bp.route("/login", methods=["GET", "POST"])
+@bp.route("/login")
 def login() -> str | Response:
-    """Login page - enter email to receive magic link."""
-    if g.user:
+    """Redirect to Gatekeeper SSO login, or show fallback page."""
+    if g.get("user"):
         return redirect(url_for("index"))
 
-    if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
+    gk = current_app.config.get("GATEKEEPER_CLIENT")
+    if not gk:
+        return render_template("auth/login.html", login_url=None)
 
-        if not email:
-            flash("Please enter your email address.", "error")
-            return render_template("auth/login.html")
+    login_url = gk.get_login_url()
+    if not login_url:
+        return render_template("auth/login.html", login_url=None)
 
-        # Get or create user
-        user, created = User.get_or_create(email)
+    next_url = request.args.get("next", "/")
+    callback_url = url_for("auth.verify", _external=True)
 
-        if not user.is_active:
-            flash("Your account has been deactivated.", "error")
-            return render_template("auth/login.html")
-
-        # Generate and send magic link
-        magic_link = generate_magic_link(email)
-
-        if current_app.config.get("DEBUG"):
-            # In debug mode, also log the link
-            current_app.logger.info(f"Magic link for {email}: {magic_link}")
-
-        if send_magic_link(email, magic_link):
-            return render_template("auth/login_sent.html", email=email)
-        else:
-            # Email failed but in debug mode, show the link anyway
-            if current_app.config.get("DEBUG"):
-                flash(f"Email not configured. Debug link: {magic_link}", "info")
-                return render_template("auth/login_sent.html", email=email, debug_link=magic_link)
-            else:
-                flash("Failed to send login email. Please try again.", "error")
-
-    return render_template("auth/login.html")
+    return redirect(
+        f"{login_url}?app_name=Cadence"
+        f"&callback_url={callback_url}"
+        f"&next={next_url}"
+    )
 
 
 @bp.route("/verify")
 def verify() -> str | Response:
-    """Verify magic link token and log user in."""
+    """Verify magic link token from Gatekeeper and establish session."""
+    gk = current_app.config.get("GATEKEEPER_CLIENT")
+    if not gk:
+        flash("Authentication is not configured.", "error")
+        return redirect(url_for("index"))
+
     token = request.args.get("token", "")
-    trust = request.args.get("trust", "0") == "1"
+    result = gk.verify_magic_link(token)
 
-    email = verify_magic_token(token)
-
-    if not email:
+    if not result:
         flash("Invalid or expired login link. Please request a new one.", "error")
         return redirect(url_for("auth.login"))
 
-    user = User.get_by_email(email)
+    user, redirect_url = result
 
-    if not user:
-        flash("User not found.", "error")
-        return redirect(url_for("auth.login"))
+    # Create auth token and set cookie
+    auth_token = gk.create_auth_token(user)
 
-    if not user.is_active:
-        flash("Your account has been deactivated.", "error")
-        return redirect(url_for("auth.login"))
+    # Check if user has a display_name set in cadence properties
+    display_name = user_helpers.get_cadence_prop(gk, user.username, "display_name")
 
-    # Log the user in
-    session.clear()
-    session["user_id"] = user.id
+    if not display_name:
+        response = redirect(url_for("auth.setup_profile"))
+    else:
+        response = redirect(redirect_url or url_for("index"))
+        flash(f"Welcome, {display_name}!", "success")
 
-    # Check if this is a new user who needs to set up their profile
-    if not user.display_name:
-        return redirect(url_for("auth.setup_profile", trust="1" if trust else "0"))
+    response.set_cookie(
+        "gk_session",
+        auth_token,
+        max_age=86400 * 365,
+        httponly=True,
+        secure=not current_app.config.get("DEBUG", False),
+        samesite="Lax",
+    )
 
-    response = redirect(url_for("index"))
-
-    # If user wants to trust this device, create persistent session
-    if trust:
-        device_name = request.user_agent.string[:100] if request.user_agent else None
-        token = create_trusted_session(user.id, device_name)
-        days = current_app.config.get("TRUSTED_SESSION_DAYS", 365)
-        response.set_cookie(
-            "cadence_session",
-            token,
-            max_age=days * 24 * 60 * 60,
-            httponly=True,
-            secure=not current_app.config.get("DEBUG", False),
-            samesite="Lax",
-        )
-
-    flash("You have been logged in.", "success")
     return response
 
 
@@ -265,52 +119,27 @@ def verify() -> str | Response:
 @login_required
 def setup_profile() -> str | Response:
     """Set up profile for new users."""
-    trust = request.args.get("trust", "0")
-
     if request.method == "POST":
         display_name = request.form.get("display_name", "").strip()
 
         if not display_name:
             flash("Please enter your name.", "error")
-            return render_template("auth/setup_profile.html", trust=trust)
+            return render_template("auth/setup_profile.html")
 
-        g.user.update(display_name=display_name)
-
-        response = redirect(url_for("index"))
-
-        # Handle trust device after profile setup
-        if trust == "1":
-            device_name = request.user_agent.string[:100] if request.user_agent else None
-            token = create_trusted_session(g.user.id, device_name)
-            days = current_app.config.get("TRUSTED_SESSION_DAYS", 365)
-            response.set_cookie(
-                "cadence_session",
-                token,
-                max_age=days * 24 * 60 * 60,
-                httponly=True,
-                secure=not current_app.config.get("DEBUG", False),
-                samesite="Lax",
-            )
+        gk = current_app.config.get("GATEKEEPER_CLIENT")
+        user_helpers.set_cadence_prop(gk, g.user.username, "display_name", display_name)
 
         flash(f"Welcome, {display_name}!", "success")
-        return response
+        return redirect(url_for("index"))
 
-    return render_template("auth/setup_profile.html", trust=trust)
+    return render_template("auth/setup_profile.html")
 
 
 @bp.route("/logout")
 def logout() -> Response:
     """Log out the current user."""
-    # Invalidate trusted session if exists
-    trusted_token = request.cookies.get("cadence_session")
-    if trusted_token:
-        invalidate_trusted_session(trusted_token)
-
-    session.clear()
-
     response = redirect(url_for("index"))
-    response.delete_cookie("cadence_session")
-
+    response.delete_cookie("gk_session")
     flash("You have been logged out.", "info")
     return response
 
@@ -319,7 +148,9 @@ def logout() -> Response:
 @login_required
 def settings() -> str | Response:
     """User settings page."""
+    gk = current_app.config.get("GATEKEEPER_CLIENT")
     ntfy_server = current_app.config.get("NTFY_SERVER", "https://ntfy.sh")
+    username = g.user.username
 
     if request.method == "POST":
         action = request.form.get("action")
@@ -327,39 +158,47 @@ def settings() -> str | Response:
         if action == "update_profile":
             display_name = request.form.get("display_name", "").strip()
             if display_name:
-                g.user.update(display_name=display_name)
+                user_helpers.set_cadence_prop(gk, username, "display_name", display_name)
                 flash("Profile updated.", "success")
             else:
                 flash("Display name cannot be empty.", "error")
 
         elif action == "toggle_email":
-            new_value = not g.user.email_notifications
-            g.user.update(email_notifications=new_value)
+            current_value = user_helpers.get_email_notifications(gk, username)
+            new_value = not current_value
+            user_helpers.set_cadence_prop(
+                gk, username, "email_notifications", "1" if new_value else "0"
+            )
             if new_value:
                 flash("Email notifications enabled.", "success")
             else:
                 flash("Email notifications disabled.", "success")
 
         elif action == "enable_ntfy":
-            # Generate a random topic (not based on user UUID for security)
             topic = f"cadence-{secrets.token_urlsafe(16)}"
-            g.user.update(ntfy_topic=topic)
+            user_helpers.set_cadence_prop(gk, username, "ntfy_topic", topic)
             flash("Push notifications enabled.", "success")
 
         elif action == "disable_ntfy":
-            # Empty string is falsy and will disable notifications
-            g.user.update(ntfy_topic="")
+            user_helpers.set_cadence_prop(gk, username, "ntfy_topic", "")
             flash("Push notifications disabled.", "success")
 
         return redirect(url_for("auth.settings"))
 
-    # Build subscription URL for display
+    # Read current preferences for display
+    display_name = user_helpers.get_display_name(gk, username, g.user.fullname)
+    email_notifications = user_helpers.get_email_notifications(gk, username)
+    ntfy_topic = user_helpers.get_ntfy_topic(gk, username)
+
     ntfy_subscribe_url = None
-    if g.user.ntfy_topic:
-        ntfy_subscribe_url = f"{ntfy_server.rstrip('/')}/{g.user.ntfy_topic}"
+    if ntfy_topic:
+        ntfy_subscribe_url = f"{ntfy_server.rstrip('/')}/{ntfy_topic}"
 
     return render_template(
         "auth/settings.html",
+        display_name=display_name,
+        email_notifications=email_notifications,
+        ntfy_topic=ntfy_topic,
         ntfy_server=ntfy_server,
         ntfy_subscribe_url=ntfy_subscribe_url,
     )

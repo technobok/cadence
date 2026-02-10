@@ -5,7 +5,9 @@ from typing import Any
 
 from flask import (
     Blueprint,
+    current_app,
     flash,
+    g,
     redirect,
     render_template,
     request,
@@ -14,7 +16,7 @@ from flask import (
 from werkzeug.wrappers import Response
 
 from cadence.blueprints.auth import admin_required
-from cadence.models import Activity, Task, User
+from cadence.models import Activity, Task, user_helpers
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -30,6 +32,25 @@ def render_partial_or_full(partial: str, full: str, **context: Any) -> str:
     return render_template(template, **context)
 
 
+def _get_known_usernames() -> list[str]:
+    """Get all usernames that have interacted with Cadence."""
+    from cadence.db import get_db
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT DISTINCT username FROM (
+            SELECT owner AS username FROM task
+            UNION SELECT username FROM comment
+            UNION SELECT username FROM task_watcher
+            UNION SELECT username FROM activity_log WHERE username IS NOT NULL
+            UNION SELECT uploaded_by AS username FROM attachment
+        )
+        ORDER BY username
+    """)
+    return [str(row[0]) for row in cursor.fetchall()]
+
+
 # --- Dashboard ---
 
 
@@ -37,7 +58,6 @@ def render_partial_or_full(partial: str, full: str, **context: Any) -> str:
 @admin_required
 def index() -> str:
     """Admin dashboard."""
-    user_count = User.count()
     task_count = Task.count()
 
     # Recent activity (last 24 hours)
@@ -45,7 +65,6 @@ def index() -> str:
 
     return render_template(
         "admin/index.html",
-        user_count=user_count,
         task_count=task_count,
         recent_activity_count=len(recent_activity),
     )
@@ -57,82 +76,90 @@ def index() -> str:
 @bp.route("/users")
 @admin_required
 def users() -> str:
-    """List all users."""
-    all_users = User.get_all(include_inactive=True)
+    """List all known Cadence users with their gatekeeper info."""
+    gk = current_app.config.get("GATEKEEPER_CLIENT")
+    usernames = _get_known_usernames()
 
-    # Sort by email by default, or by query param
-    sort_by = request.args.get("sort", "email")
+    user_list: list[dict[str, Any]] = []
+    for username in usernames:
+        gk_user = gk.get_user(username) if gk else None
+        fullname = gk_user.fullname if gk_user else ""
+        user_list.append({
+            "username": username,
+            "email": gk_user.email if gk_user else "",
+            "fullname": fullname,
+            "display_name": user_helpers.get_display_name(
+                gk, username, fullname
+            ),
+            "is_admin": user_helpers.is_admin(gk, username) if gk else False,
+            "enabled": gk_user.enabled if gk_user else False,
+        })
+
+    # Sort
+    sort_by = request.args.get("sort", "username")
     sort_dir = request.args.get("dir", "asc")
+    reverse = sort_dir == "desc"
 
-    if sort_by == "email":
-        all_users.sort(key=lambda u: u.email.lower(), reverse=(sort_dir == "desc"))
+    if sort_by == "username":
+        user_list.sort(key=lambda u: u["username"].lower(), reverse=reverse)
+    elif sort_by == "email":
+        user_list.sort(key=lambda u: u["email"].lower(), reverse=reverse)
     elif sort_by == "name":
-        all_users.sort(key=lambda u: (u.display_name or "").lower(), reverse=(sort_dir == "desc"))
+        user_list.sort(
+            key=lambda u: u["display_name"].lower(), reverse=reverse
+        )
     elif sort_by == "admin":
-        all_users.sort(key=lambda u: u.is_admin, reverse=(sort_dir == "desc"))
-    elif sort_by == "active":
-        all_users.sort(key=lambda u: u.is_active, reverse=(sort_dir == "desc"))
-    elif sort_by == "created":
-        all_users.sort(key=lambda u: u.created_at, reverse=(sort_dir == "desc"))
+        user_list.sort(key=lambda u: u["is_admin"], reverse=reverse)
+    elif sort_by == "enabled":
+        user_list.sort(key=lambda u: u["enabled"], reverse=reverse)
 
     return render_partial_or_full(
         "admin/_users_list.html",
         "admin/users.html",
-        users=all_users,
+        users=user_list,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
 
 
-@bp.route("/users/<int:user_id>/toggle-admin", methods=["POST"])
+@bp.route("/users/<username>/toggle-admin", methods=["POST"])
 @admin_required
-def toggle_admin(user_id: int) -> str | Response:
+def toggle_admin(username: str) -> str | Response:
     """Toggle admin status for a user."""
-    from flask import g
-
-    user = User.get_by_id(user_id)
-    if user is None:
-        flash("User not found.", "error")
-        return redirect(url_for("admin.users"))
+    gk = current_app.config.get("GATEKEEPER_CLIENT")
 
     # Prevent removing own admin status
-    if user.id == g.user.id:
+    if username == g.user.username:
         flash("Cannot modify your own admin status.", "error")
         return redirect(url_for("admin.users"))
 
-    user.update(is_admin=not user.is_admin)
-
-    status = "granted" if user.is_admin else "revoked"
-    flash(f"Admin access {status} for {user.email}.", "success")
-
-    if is_htmx_request():
-        return render_template("admin/_user_row.html", user=user)
-
-    return redirect(url_for("admin.users"))
-
-
-@bp.route("/users/<int:user_id>/toggle-active", methods=["POST"])
-@admin_required
-def toggle_active(user_id: int) -> str | Response:
-    """Toggle active status for a user."""
-    from flask import g
-
-    user = User.get_by_id(user_id)
-    if user is None:
-        flash("User not found.", "error")
+    if not gk:
+        flash("Gatekeeper not configured.", "error")
         return redirect(url_for("admin.users"))
 
-    # Prevent deactivating self
-    if user.id == g.user.id:
-        flash("Cannot deactivate your own account.", "error")
-        return redirect(url_for("admin.users"))
+    current_admin = user_helpers.is_admin(gk, username)
+    user_helpers.set_cadence_prop(
+        gk, username, "is_admin", "0" if current_admin else "1"
+    )
 
-    user.update(is_active=not user.is_active)
-
-    status = "activated" if user.is_active else "deactivated"
-    flash(f"User {user.email} has been {status}.", "success")
+    status = "revoked" if current_admin else "granted"
+    display_name = user_helpers.get_display_name(gk, username, username)
+    flash(f"Admin access {status} for {display_name}.", "success")
 
     if is_htmx_request():
+        # Rebuild the user dict for the row template
+        gk_user = gk.get_user(username)
+        fullname = gk_user.fullname if gk_user else ""
+        user = {
+            "username": username,
+            "email": gk_user.email if gk_user else "",
+            "fullname": fullname,
+            "display_name": user_helpers.get_display_name(
+                gk, username, fullname
+            ),
+            "is_admin": not current_admin,
+            "enabled": gk_user.enabled if gk_user else False,
+        }
         return render_template("admin/_user_row.html", user=user)
 
     return redirect(url_for("admin.users"))
@@ -148,7 +175,6 @@ def backup() -> Response:
     from pathlib import Path
 
     import apsw
-    from flask import current_app
 
     from cadence.db import get_db
 
@@ -195,10 +221,8 @@ def backups() -> str:
     """List available backups."""
     from pathlib import Path
 
-    from flask import current_app
-
     backups_dir = current_app.config.get("BACKUPS_DIRECTORY")
-    backup_files = []
+    backup_files: list[dict[str, Any]] = []
 
     if backups_dir:
         backups_path = Path(backups_dir)
@@ -222,7 +246,7 @@ def download_backup(filename: str) -> Response:
     """Download a specific backup file."""
     from pathlib import Path
 
-    from flask import current_app, send_file
+    from flask import send_file
 
     # Sanitize filename to prevent directory traversal
     if "/" in filename or "\\" in filename or ".." in filename:
@@ -253,8 +277,6 @@ def delete_backup(filename: str) -> Response:
     """Delete a backup file."""
     from pathlib import Path
 
-    from flask import current_app
-
     # Sanitize filename
     if "/" in filename or "\\" in filename or ".." in filename:
         flash("Invalid filename.", "error")
@@ -282,6 +304,8 @@ def delete_backup(filename: str) -> Response:
 @admin_required
 def reports() -> str:
     """Activity reports with date filtering."""
+    gk = current_app.config.get("GATEKEEPER_CLIENT")
+
     # Default to last 7 days
     end_date = request.args.get("end_date", "")
     start_date = request.args.get("start_date", "")
@@ -294,22 +318,30 @@ def reports() -> str:
     # Get activities in date range
     activities = Activity.get_in_date_range(start_date, end_date)
 
-    # Get user map for display
-    user_ids = {a.user_id for a in activities if a.user_id}
-    users = {u.id: u for u in [User.get_by_id(uid) for uid in user_ids] if u}
+    # Build username -> display name map
+    usernames: set[str] = {a.username for a in activities if a.username}
+    users: dict[str, str] = {}
+    for uname in usernames:
+        gk_user = gk.get_user(uname) if gk else None
+        fallback = gk_user.fullname if gk_user else ""
+        users[uname] = user_helpers.get_display_name(gk, uname, fallback)
 
     # Get task map for display
-    task_ids = {a.task_id for a in activities if a.task_id}
-    tasks = {t.id: t for t in [Task.get_by_id(tid) for tid in task_ids] if t}
+    task_ids: set[int] = {a.task_id for a in activities if a.task_id}
+    tasks: dict[int, Task] = {
+        t.id: t for t in [Task.get_by_id(tid) for tid in task_ids] if t
+    }
 
     # Compute summary stats
     action_counts: dict[str, int] = {}
-    user_activity: dict[int, int] = {}
+    user_activity: dict[str, int] = {}
 
     for activity in activities:
         action_counts[activity.action] = action_counts.get(activity.action, 0) + 1
-        if activity.user_id:
-            user_activity[activity.user_id] = user_activity.get(activity.user_id, 0) + 1
+        if activity.username:
+            user_activity[activity.username] = (
+                user_activity.get(activity.username, 0) + 1
+            )
 
     # Sort action counts by count descending
     sorted_actions = sorted(action_counts.items(), key=lambda x: x[1], reverse=True)
@@ -327,5 +359,7 @@ def reports() -> str:
         end_date=end_date,
         total_activities=len(activities),
         action_counts=sorted_actions,
-        user_activity=[(users.get(uid), count) for uid, count in sorted_users],
+        user_activity=[
+            (users.get(uname, uname), count) for uname, count in sorted_users
+        ],
     )

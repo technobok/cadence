@@ -98,7 +98,7 @@ class Attachment:
     task_id: int
     file_blob_id: int
     original_filename: str
-    uploaded_by: int
+    uploaded_by: str
     uploaded_at: str
 
     @staticmethod
@@ -110,7 +110,7 @@ class Attachment:
             task_id=int(row[2]),
             file_blob_id=int(row[3]),
             original_filename=str(row[4]),
-            uploaded_by=int(row[5]),
+            uploaded_by=str(row[5]),
             uploaded_at=str(row[6]),
         )
 
@@ -149,7 +149,7 @@ class Attachment:
         task_id: int,
         file_blob_id: int,
         original_filename: str,
-        uploaded_by: int,
+        uploaded_by: str,
     ) -> Attachment:
         """Create a new attachment."""
         now = datetime.now(UTC).isoformat()

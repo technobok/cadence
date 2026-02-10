@@ -14,7 +14,7 @@ class Activity:
     id: int
     uuid: str
     task_id: int
-    user_id: int | None
+    username: str | None
     action: str
     details: dict[str, Any] | None
     logged_at: str
@@ -27,7 +27,7 @@ class Activity:
             id=int(row[0]),
             uuid=str(row[1]),
             task_id=int(row[2]),
-            user_id=int(row[3]) if row[3] is not None else None,
+            username=str(row[3]) if row[3] is not None else None,
             action=str(row[4]),
             details=json.loads(str(row[5])) if row[5] else None,
             logged_at=str(row[6]),
@@ -40,7 +40,7 @@ class Activity:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
+            "SELECT id, uuid, task_id, username, action, details, logged_at, "
             "skip_notification FROM activity_log WHERE id = ?",
             (activity_id,),
         )
@@ -53,7 +53,7 @@ class Activity:
     def log(
         task_id: int,
         action: str,
-        user_id: int | None = None,
+        username: str | None = None,
         details: dict[str, Any] | None = None,
         skip_notification: bool = False,
     ) -> Activity:
@@ -64,12 +64,12 @@ class Activity:
 
         with transaction() as cursor:
             cursor.execute(
-                "INSERT INTO activity_log (uuid, task_id, user_id, action, details, "
+                "INSERT INTO activity_log (uuid, task_id, username, action, details, "
                 "logged_at, skip_notification) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     activity_uuid,
                     task_id,
-                    user_id,
+                    username,
                     action,
                     details_json,
                     now,
@@ -83,7 +83,7 @@ class Activity:
             id=activity_id,
             uuid=activity_uuid,
             task_id=task_id,
-            user_id=user_id,
+            username=username,
             action=action,
             details=details,
             logged_at=now,
@@ -96,7 +96,7 @@ class Activity:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
+            "SELECT id, uuid, task_id, username, action, details, logged_at, "
             "skip_notification FROM activity_log WHERE task_id = ? "
             "ORDER BY logged_at DESC LIMIT ? OFFSET ?",
             (task_id, limit, offset),
@@ -105,7 +105,7 @@ class Activity:
 
     @staticmethod
     def get_recent(
-        limit: int = 50, user_id: int | None = None, hours: int | None = None
+        limit: int = 50, username: str | None = None, hours: int | None = None
     ) -> list[Activity]:
         """Get recent activity across all tasks."""
         from datetime import timedelta
@@ -115,30 +115,30 @@ class Activity:
 
         if hours:
             since = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
-            if user_id:
+            if username:
                 cursor.execute(
-                    "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
-                    "skip_notification FROM activity_log WHERE user_id = ? "
+                    "SELECT id, uuid, task_id, username, action, details, logged_at, "
+                    "skip_notification FROM activity_log WHERE username = ? "
                     "AND logged_at >= ? ORDER BY logged_at DESC LIMIT ?",
-                    (user_id, since, limit),
+                    (username, since, limit),
                 )
             else:
                 cursor.execute(
-                    "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
+                    "SELECT id, uuid, task_id, username, action, details, logged_at, "
                     "skip_notification FROM activity_log WHERE logged_at >= ? "
                     "ORDER BY logged_at DESC LIMIT ?",
                     (since, limit),
                 )
-        elif user_id:
+        elif username:
             cursor.execute(
-                "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
-                "skip_notification FROM activity_log WHERE user_id = ? "
+                "SELECT id, uuid, task_id, username, action, details, logged_at, "
+                "skip_notification FROM activity_log WHERE username = ? "
                 "ORDER BY logged_at DESC LIMIT ?",
-                (user_id, limit),
+                (username, limit),
             )
         else:
             cursor.execute(
-                "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
+                "SELECT id, uuid, task_id, username, action, details, logged_at, "
                 "skip_notification FROM activity_log ORDER BY logged_at DESC LIMIT ?",
                 (limit,),
             )
@@ -156,7 +156,7 @@ class Activity:
         end = f"{end_date}T23:59:59"
 
         cursor.execute(
-            "SELECT id, uuid, task_id, user_id, action, details, logged_at, "
+            "SELECT id, uuid, task_id, username, action, details, logged_at, "
             "skip_notification FROM activity_log "
             "WHERE logged_at >= ? AND logged_at <= ? "
             "ORDER BY logged_at DESC LIMIT ?",

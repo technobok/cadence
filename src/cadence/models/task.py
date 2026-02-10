@@ -24,7 +24,7 @@ class Task:
     title: str
     description: str | None
     status: str
-    owner_id: int
+    owner: str
     due_date: str | None
     is_private: bool
     created_at: str
@@ -39,7 +39,7 @@ class Task:
             title=str(row[2]),
             description=str(row[3]) if row[3] else None,
             status=str(row[4]),
-            owner_id=int(row[5]),
+            owner=str(row[5]),
             due_date=str(row[6]) if row[6] else None,
             is_private=bool(row[7]),
             created_at=str(row[8]),
@@ -52,7 +52,7 @@ class Task:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, title, description, status, owner_id, "
+            "SELECT id, uuid, title, description, status, owner, "
             "due_date, is_private, created_at, updated_at FROM task WHERE id = ?",
             (task_id,),
         )
@@ -67,7 +67,7 @@ class Task:
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "SELECT id, uuid, title, description, status, owner_id, "
+            "SELECT id, uuid, title, description, status, owner, "
             "due_date, is_private, created_at, updated_at FROM task WHERE uuid = ?",
             (task_uuid,),
         )
@@ -79,7 +79,7 @@ class Task:
     @staticmethod
     def create(
         title: str,
-        owner_id: int,
+        owner: str,
         description: str | None = None,
         due_date: str | None = None,
         is_private: bool = False,
@@ -90,10 +90,10 @@ class Task:
 
         with transaction() as cursor:
             cursor.execute(
-                "INSERT INTO task (uuid, title, description, status, owner_id, "
+                "INSERT INTO task (uuid, title, description, status, owner, "
                 "due_date, is_private, created_at, updated_at) "
                 "VALUES (?, ?, ?, 'new', ?, ?, ?, ?, ?)",
-                (task_uuid, title, description, owner_id, due_date, int(is_private), now, now),
+                (task_uuid, title, description, owner, due_date, int(is_private), now, now),
             )
             row = cursor.execute("SELECT last_insert_rowid()").fetchone()
             task_id = int(row[0]) if row else 0
@@ -104,7 +104,7 @@ class Task:
             title=title,
             description=description,
             status="new",
-            owner_id=owner_id,
+            owner=owner,
             due_date=due_date,
             is_private=is_private,
             created_at=now,
@@ -117,7 +117,7 @@ class Task:
         description: str | None = None,
         due_date: str | None = None,
         is_private: bool | None = None,
-        owner_id: int | None = None,
+        owner: str | None = None,
     ) -> list[tuple[str, str, str]]:
         """
         Update task fields. Returns list of changes as (field, old_value, new_value).
@@ -152,10 +152,10 @@ class Task:
             params.append(int(is_private))
             self.is_private = is_private
 
-        if owner_id is not None and owner_id != self.owner_id:
-            updates.append("owner_id = ?")
-            params.append(owner_id)
-            self.owner_id = owner_id
+        if owner is not None and owner != self.owner:
+            updates.append("owner = ?")
+            params.append(owner)
+            self.owner = owner
 
         if updates:
             updates.append("updated_at = ?")
@@ -209,9 +209,9 @@ class Task:
     @staticmethod
     def get_all(
         status: str | None = None,
-        owner_id: int | None = None,
+        owner: str | None = None,
         include_private: bool = False,
-        current_user_id: int | None = None,
+        current_username: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Task]:
@@ -226,19 +226,19 @@ class Task:
             conditions.append("status = ?")
             params.append(status)
 
-        if owner_id:
-            conditions.append("owner_id = ?")
-            params.append(owner_id)
+        if owner:
+            conditions.append("owner = ?")
+            params.append(owner)
 
-        if not include_private and current_user_id:
+        if not include_private and current_username:
             # Show public tasks OR private tasks owned by/watched by current user
             conditions.append("""
                 (is_private = 0
-                 OR owner_id = ?
-                 OR id IN (SELECT task_id FROM task_watcher WHERE user_id = ?))
+                 OR owner = ?
+                 OR id IN (SELECT task_id FROM task_watcher WHERE username = ?))
             """)
-            params.append(current_user_id)
-            params.append(current_user_id)
+            params.append(current_username)
+            params.append(current_username)
         elif not include_private:
             conditions.append("is_private = 0")
 
@@ -248,7 +248,7 @@ class Task:
         params.append(offset)
 
         cursor.execute(
-            f"SELECT id, uuid, title, description, status, owner_id, "
+            f"SELECT id, uuid, title, description, status, owner, "
             f"due_date, is_private, created_at, updated_at FROM task "
             f"{where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?",
             params,
@@ -259,9 +259,9 @@ class Task:
     @staticmethod
     def count(
         status: str | None = None,
-        owner_id: int | None = None,
+        owner: str | None = None,
         include_private: bool = False,
-        current_user_id: int | None = None,
+        current_username: str | None = None,
     ) -> int:
         """Count tasks with optional filtering."""
         db = get_db()
@@ -274,18 +274,18 @@ class Task:
             conditions.append("status = ?")
             params.append(status)
 
-        if owner_id:
-            conditions.append("owner_id = ?")
-            params.append(owner_id)
+        if owner:
+            conditions.append("owner = ?")
+            params.append(owner)
 
-        if not include_private and current_user_id:
+        if not include_private and current_username:
             conditions.append("""
                 (is_private = 0
-                 OR owner_id = ?
-                 OR id IN (SELECT task_id FROM task_watcher WHERE user_id = ?))
+                 OR owner = ?
+                 OR id IN (SELECT task_id FROM task_watcher WHERE username = ?))
             """)
-            params.append(current_user_id)
-            params.append(current_user_id)
+            params.append(current_username)
+            params.append(current_username)
         elif not include_private:
             conditions.append("is_private = 0")
 
