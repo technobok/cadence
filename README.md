@@ -4,39 +4,35 @@ A self-hosted task and issue tracker built with Python, Flask, HTMX, and SQLite.
 
 ## Features
 
-- **Magic link authentication** - passwordless login via email
+- **Gatekeeper SSO authentication** - passwordless login via [Gatekeeper](../gatekeeper/) centralised SSO
 - **Task management** - create, track, and manage tasks with status workflows
 - **Comments & attachments** - with automatic file deduplication
 - **Activity logging** - immutable audit trail of all changes
 - **Notifications** - email and ntfy support
 - **Dark mode** - system/light/dark theme toggle
-- **Self-contained** - single SQLite database, no external dependencies
 
 ## Quick Start
 
+Requires Python 3.14+, [uv](https://docs.astral.sh/uv/), and a [Gatekeeper](../gatekeeper/) instance.
+
 ```bash
-# Install dependencies (requires Python 3.14+ and uv)
+# Install dependencies
 make sync
 
 # Create a blank database
 make init-db
 
-# Configure mail sender (needed for magic links)
-make config-set KEY=mail.mail_sender VAL=tasks@example.com
+# Point Cadence at your Gatekeeper database (for authentication)
+export GATEKEEPER_DB=/path/to/gatekeeper/instance/gatekeeper.sqlite3
 
-# Configure SMTP
-make config-set KEY=mail.smtp_server VAL=smtp.example.com
-make config-set KEY=mail.smtp_username VAL=tasks@example.com
-make config-set KEY=mail.smtp_password VAL=secret
-
-# Create an initial admin user
-.venv/bin/cadence-admin make-admin admin@example.com
+# Grant admin privileges to a Gatekeeper user
+.venv/bin/cadence-admin make-admin jsmith
 
 # Start the development server
 make rundev
 ```
 
-The app will be available at http://127.0.0.1:5000
+The app will be available at http://127.0.0.1:5000. Users log in via Gatekeeper's centralised SSO page (requires `server.login_url` to be set in Gatekeeper — see below).
 
 ### Database location
 
@@ -54,9 +50,29 @@ The resolution order is:
 
 All CLI commands (`cadence-admin`, `make config-*`, `make init-db`) and the web server use the same resolution logic — set `CADENCE_DB` once and everything finds the database.
 
+### Gatekeeper authentication
+
+Cadence uses [Gatekeeper](../gatekeeper/) for all authentication. Set `GATEKEEPER_DB` to the path of the Gatekeeper SQLite database:
+
+```bash
+export GATEKEEPER_DB=/path/to/gatekeeper/instance/gatekeeper.sqlite3
+```
+
+Cadence reads the database in local mode (direct SQLite access, no network calls) for per-request session validation.
+
+For login to work, Gatekeeper must have `server.login_url` configured (see the [Gatekeeper README](../gatekeeper/README.md#centralised-sso-login)). Unauthenticated users are redirected to Gatekeeper's login page, which sends a magic link via outbox. The magic link redirects back to Cadence's `/auth/verify` endpoint, which validates the token and sets a session cookie.
+
+User preferences (display name, email notifications, ntfy topic, admin status) are stored in Gatekeeper's `user_property` table with app `"cadence"`. Grant admin access with:
+
+```bash
+.venv/bin/cadence-admin make-admin USERNAME
+```
+
 ## Docker Deployment
 
 The `docker-compose.yml` joins a shared Docker network (`platform-net`) for use behind a reverse proxy.
+
+The Gatekeeper database is mounted read-only into the container via `GATEKEEPER_DB_PATH` (defaults to `../gatekeeper/instance/gatekeeper.sqlite3`).
 
 ```bash
 # First time only — initialize the database
@@ -65,22 +81,6 @@ docker compose --profile init up init
 # Build and start
 docker compose build
 docker compose up -d
-
-# Set configuration
-docker compose exec app make config-set KEY=mail.smtp_server VAL=smtp.example.com
-docker compose exec app make config-set KEY=mail.smtp_username VAL=tasks@example.com
-docker compose exec app make config-set KEY=mail.smtp_password VAL=secret
-docker compose exec app make config-set KEY=mail.mail_sender VAL=tasks@example.com
-```
-
-To replicate configuration from another instance, export and import:
-
-```bash
-# On the source instance
-make config-export FILE=cadence-config.sh
-
-# On the target instance
-bash cadence-config.sh
 ```
 
 ### Services
@@ -135,14 +135,14 @@ make worker   # Start notification worker (separate terminal)
 The `cadence-admin` CLI provides the same operations outside of Make:
 
 ```
-cadence-admin init-db              # Initialize the database schema
-cadence-admin make-admin EMAIL     # Grant admin privileges to a user
-cadence-admin list-users           # List all users
-cadence-admin config list          # Show settings
-cadence-admin config get KEY       # Get a single setting
-cadence-admin config set KEY VAL   # Set a setting
-cadence-admin config import FILE   # Import from INI
-cadence-admin config export FILE   # Export all settings as a shell script
+cadence-admin init-db                # Initialize the database schema
+cadence-admin make-admin USERNAME    # Grant cadence admin privileges to a Gatekeeper user
+cadence-admin list-users             # List all known users (from Gatekeeper)
+cadence-admin config list            # Show settings
+cadence-admin config get KEY         # Get a single setting
+cadence-admin config set KEY VAL     # Set a setting
+cadence-admin config import FILE     # Import from INI
+cadence-admin config export FILE     # Export all settings as a shell script
 ```
 
 ## Configuration reference
@@ -166,8 +166,6 @@ All settings are stored in the SQLite database (`app_setting` table) and managed
 | `uploads.max_size_mb` | int | `10` | Maximum upload size in MB |
 | `blobs.directory` | string | `instance/blobs` | Blob storage directory |
 | `backups.directory` | string | `instance/backups` | Backup storage directory |
-| `auth.magic_link_expiry_seconds` | int | `3600` | Magic link token lifetime |
-| `auth.trusted_session_days` | int | `365` | Trusted session duration in days |
 | `comments.edit_window_seconds` | int | `300` | Comment edit window in seconds |
 | `worker.poll_interval` | int | `5` | Worker poll interval in seconds |
 | `worker.batch_size` | int | `50` | Notifications to process per batch |
