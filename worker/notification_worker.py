@@ -187,7 +187,7 @@ def process_notifications(
     return processed
 
 
-def run_worker():
+def run_worker() -> None:
     """Main worker loop."""
     poll_interval = _get_config_value("worker.poll_interval")
     batch_size = _get_config_value("worker.batch_size")

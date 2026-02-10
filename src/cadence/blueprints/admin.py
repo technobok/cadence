@@ -1,6 +1,7 @@
 """Admin blueprint for user management and system administration."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from flask import (
     Blueprint,
@@ -10,6 +11,7 @@ from flask import (
     request,
     url_for,
 )
+from werkzeug.wrappers import Response
 
 from cadence.blueprints.auth import admin_required
 from cadence.models import Activity, Task, User
@@ -22,7 +24,7 @@ def is_htmx_request() -> bool:
     return request.headers.get("HX-Request") == "true"
 
 
-def render_partial_or_full(partial: str, full: str, **context):
+def render_partial_or_full(partial: str, full: str, **context: Any) -> str:
     """Render partial template for HTMX, full page otherwise."""
     template = partial if is_htmx_request() else full
     return render_template(template, **context)
@@ -33,7 +35,7 @@ def render_partial_or_full(partial: str, full: str, **context):
 
 @bp.route("/")
 @admin_required
-def index():
+def index() -> str:
     """Admin dashboard."""
     user_count = User.count()
     task_count = Task.count()
@@ -54,7 +56,7 @@ def index():
 
 @bp.route("/users")
 @admin_required
-def users():
+def users() -> str:
     """List all users."""
     all_users = User.get_all(include_inactive=True)
 
@@ -84,7 +86,7 @@ def users():
 
 @bp.route("/users/<int:user_id>/toggle-admin", methods=["POST"])
 @admin_required
-def toggle_admin(user_id: int):
+def toggle_admin(user_id: int) -> str | Response:
     """Toggle admin status for a user."""
     from flask import g
 
@@ -111,7 +113,7 @@ def toggle_admin(user_id: int):
 
 @bp.route("/users/<int:user_id>/toggle-active", methods=["POST"])
 @admin_required
-def toggle_active(user_id: int):
+def toggle_active(user_id: int) -> str | Response:
     """Toggle active status for a user."""
     from flask import g
 
@@ -141,7 +143,7 @@ def toggle_active(user_id: int):
 
 @bp.route("/backup", methods=["POST"])
 @admin_required
-def backup():
+def backup() -> Response:
     """Create a consistent backup of the database using APSW's backup API."""
     from pathlib import Path
 
@@ -189,7 +191,7 @@ def backup():
 
 @bp.route("/backups")
 @admin_required
-def backups():
+def backups() -> str:
     """List available backups."""
     from pathlib import Path
 
@@ -216,7 +218,7 @@ def backups():
 
 @bp.route("/backups/<filename>")
 @admin_required
-def download_backup(filename: str):
+def download_backup(filename: str) -> Response:
     """Download a specific backup file."""
     from pathlib import Path
 
@@ -247,7 +249,7 @@ def download_backup(filename: str):
 
 @bp.route("/backups/<filename>/delete", methods=["POST"])
 @admin_required
-def delete_backup(filename: str):
+def delete_backup(filename: str) -> Response:
     """Delete a backup file."""
     from pathlib import Path
 
@@ -278,7 +280,7 @@ def delete_backup(filename: str):
 
 @bp.route("/reports")
 @admin_required
-def reports():
+def reports() -> str:
     """Activity reports with date filtering."""
     # Default to last 7 days
     end_date = request.args.get("end_date", "")

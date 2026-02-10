@@ -140,7 +140,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app.register_blueprint(tags.bp)
 
     @app.route("/")
-    def index():
+    def index() -> str:
         return render_template("index.html")
 
     return app
@@ -192,6 +192,6 @@ def _load_config_from_db(app: Flask) -> None:
     if any((x_for, x_proto, x_host, x_prefix)):
         from werkzeug.middleware.proxy_fix import ProxyFix
 
-        app.wsgi_app = ProxyFix(
+        app.wsgi_app = ProxyFix(  # type: ignore[assignment]
             app.wsgi_app, x_for=x_for, x_proto=x_proto, x_host=x_host, x_prefix=x_prefix
         )

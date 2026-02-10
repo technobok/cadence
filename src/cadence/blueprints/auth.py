@@ -4,7 +4,9 @@ import functools
 import hashlib
 import secrets
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from flask import (
     Blueprint,
@@ -18,6 +20,7 @@ from flask import (
     url_for,
 )
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from werkzeug.wrappers import Response
 
 from cadence.db import get_db, transaction
 from cadence.models import User
@@ -141,35 +144,35 @@ def load_logged_in_user() -> None:
         g.user = User.get_by_id(user_id)
 
 
-def login_required(view):
+def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator that redirects anonymous users to the login page."""
 
     @functools.wraps(view)
-    def wrapped_view(**kwargs):
+    def wrapped_view(*args: Any, **kwargs: Any) -> Any:
         if g.user is None:
             return redirect(url_for("auth.login", next=request.url))
-        return view(**kwargs)
+        return view(*args, **kwargs)
 
     return wrapped_view
 
 
-def admin_required(view):
+def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator that requires admin role."""
 
     @functools.wraps(view)
-    def wrapped_view(**kwargs):
+    def wrapped_view(*args: Any, **kwargs: Any) -> Any:
         if g.user is None:
             return redirect(url_for("auth.login", next=request.url))
         if not g.user.is_admin:
             flash("Admin access required.", "error")
             return redirect(url_for("index"))
-        return view(**kwargs)
+        return view(*args, **kwargs)
 
     return wrapped_view
 
 
 @bp.route("/login", methods=["GET", "POST"])
-def login():
+def login() -> str | Response:
     """Login page - enter email to receive magic link."""
     if g.user:
         return redirect(url_for("index"))
@@ -209,7 +212,7 @@ def login():
 
 
 @bp.route("/verify")
-def verify():
+def verify() -> str | Response:
     """Verify magic link token and log user in."""
     token = request.args.get("token", "")
     trust = request.args.get("trust", "0") == "1"
@@ -260,7 +263,7 @@ def verify():
 
 @bp.route("/setup-profile", methods=["GET", "POST"])
 @login_required
-def setup_profile():
+def setup_profile() -> str | Response:
     """Set up profile for new users."""
     trust = request.args.get("trust", "0")
 
@@ -296,7 +299,7 @@ def setup_profile():
 
 
 @bp.route("/logout")
-def logout():
+def logout() -> Response:
     """Log out the current user."""
     # Invalidate trusted session if exists
     trusted_token = request.cookies.get("cadence_session")
@@ -314,7 +317,7 @@ def logout():
 
 @bp.route("/settings", methods=["GET", "POST"])
 @login_required
-def settings():
+def settings() -> str | Response:
     """User settings page."""
     ntfy_server = current_app.config.get("NTFY_SERVER", "https://ntfy.sh")
 

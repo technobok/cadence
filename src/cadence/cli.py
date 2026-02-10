@@ -7,6 +7,7 @@ import sys
 from datetime import UTC, datetime
 
 import click
+from flask import Flask
 
 from cadence.config import (
     INI_MAP,
@@ -24,7 +25,7 @@ from cadence.db import (
 )
 
 
-def _make_app():
+def _make_app() -> Flask:
     """Create a Flask app for commands that need app context."""
     from cadence import create_app
 
@@ -66,7 +67,7 @@ def _db_set(key: str, value: str) -> None:
 
 
 @click.group()
-def main():
+def main() -> None:
     """Cadence administration tool."""
 
 
@@ -74,12 +75,12 @@ def main():
 
 
 @main.group()
-def config():
+def config() -> None:
     """View and manage configuration settings."""
 
 
 @config.command("list")
-def config_list():
+def config_list() -> None:
     """Show all settings with their effective values."""
     db_values = _db_get_all()
 
@@ -114,7 +115,7 @@ def config_list():
 
 @config.command("get")
 @click.argument("key")
-def config_get(key: str):
+def config_get(key: str) -> None:
     """Get the effective value of a setting."""
     entry = resolve_entry(key)
     if not entry:
@@ -143,7 +144,7 @@ def config_get(key: str):
 @config.command("set")
 @click.argument("key")
 @click.argument("value")
-def config_set(key: str, value: str):
+def config_set(key: str, value: str) -> None:
     """Set a configuration value in the database."""
     entry = resolve_entry(key)
     if not entry:
@@ -165,7 +166,7 @@ def config_set(key: str, value: str):
 
 @config.command("export")
 @click.argument("output_file", type=click.Path())
-def config_export(output_file: str):
+def config_export(output_file: str) -> None:
     """Export all settings as a shell script of make config-set calls."""
     db_values = _db_get_all()
     lines = [
@@ -194,7 +195,7 @@ def config_export(output_file: str):
 
 @config.command("import")
 @click.argument("ini_file", type=click.Path(exists=True))
-def config_import(ini_file: str):
+def config_import(ini_file: str) -> None:
     """Import settings from an INI config file."""
     cfg = configparser.ConfigParser()
     cfg.read(ini_file)
@@ -227,7 +228,7 @@ def config_import(ini_file: str):
 
 
 @main.command("init-db")
-def init_db_command():
+def init_db_command() -> None:
     """Initialize the database schema."""
     db_path = get_db_path()
     init_db_at(db_path)
@@ -236,7 +237,7 @@ def init_db_command():
 
 @main.command("make-admin")
 @click.argument("email")
-def make_admin_command(email: str):
+def make_admin_command(email: str) -> None:
     """Grant admin privileges to a user by email."""
     app = _make_app()
     with app.app_context():
@@ -254,7 +255,7 @@ def make_admin_command(email: str):
 
 
 @main.command("list-users")
-def list_users_command():
+def list_users_command() -> None:
     """List all users."""
     app = _make_app()
     with app.app_context():

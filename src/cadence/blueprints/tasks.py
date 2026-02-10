@@ -1,8 +1,9 @@
 """Tasks blueprint for task management."""
 
+from typing import Any
+
 from flask import (
     Blueprint,
-    Response,
     abort,
     current_app,
     flash,
@@ -13,6 +14,7 @@ from flask import (
     request,
     url_for,
 )
+from werkzeug.wrappers import Response
 
 from cadence.blueprints.auth import login_required
 from cadence.models import (
@@ -60,7 +62,7 @@ def can_view_task(task: Task, user: User) -> bool:
     return False
 
 
-def render_partial_or_full(partial: str, full: str, **context):
+def render_partial_or_full(partial: str, full: str, **context: Any) -> str:
     """Render partial template for HTMX, full page otherwise."""
     template = partial if is_htmx_request() else full
     return render_template(template, **context)
@@ -100,7 +102,7 @@ def render_with_activity_oob(primary_template: str, task: Task, **context) -> st
     return primary_html + oob_html
 
 
-def get_watchers_context(task: Task) -> dict:
+def get_watchers_context(task: Task) -> dict[str, Any]:
     """Get watchers context data for a task."""
     watcher_count = TaskWatcher.count(task.id)
     watchers_data = TaskWatcher.get_watchers(task.id)
@@ -142,7 +144,7 @@ def render_activity_with_watchers_oob(task: Task) -> str:
     return activity_html + oob_html
 
 
-def get_tags_context(task: Task) -> dict:
+def get_tags_context(task: Task) -> dict[str, Any]:
     """Get tags context data for a task."""
     tag_ids = TaskTag.get_tag_ids_for_task(task.id)
     tags = [Tag.get_by_id(tid) for tid in tag_ids]
@@ -165,7 +167,7 @@ def render_tags_section(task: Task) -> str:
 
 @bp.route("/")
 @login_required
-def index():
+def index() -> str:
     """List all tasks with optional filtering."""
     status_filter = request.args.get("status", "")
     owner_filter = request.args.get("owner", "")
@@ -225,7 +227,7 @@ def index():
 
 @bp.route("/new", methods=["GET", "POST"])
 @login_required
-def create():
+def create() -> str | Response:
     """Create a new task."""
     if request.method == "POST":
         title = request.form.get("title", "").strip()
@@ -283,12 +285,12 @@ def create():
 
 @bp.route("/<task_uuid>")
 @login_required
-def view(task_uuid: str):
+def view(task_uuid: str) -> str:
     """View a single task."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return  # unreachable but helps type checker
+    assert task is not None
 
     # Check access for private tasks (owner, admin, or watcher)
     if not can_view_task(task, g.user):
@@ -355,12 +357,12 @@ def view(task_uuid: str):
 
 @bp.route("/<task_uuid>/edit", methods=["GET", "POST"])
 @login_required
-def edit(task_uuid: str):
+def edit(task_uuid: str) -> str | Response:
     """Edit a task."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return  # unreachable but helps type checker
+    assert task is not None
 
     # Only owner or admin can edit
     if task.owner_id != g.user.id and not g.user.is_admin:
@@ -446,12 +448,12 @@ def edit(task_uuid: str):
 
 @bp.route("/<task_uuid>/status", methods=["POST"])
 @login_required
-def change_status(task_uuid: str):
+def change_status(task_uuid: str) -> str | Response:
     """Change task status."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return  # unreachable but helps type checker
+    assert task is not None
 
     # Only owner or admin can change status
     if task.owner_id != g.user.id and not g.user.is_admin:
@@ -488,12 +490,12 @@ def change_status(task_uuid: str):
 
 @bp.route("/<task_uuid>/delete", methods=["POST"])
 @login_required
-def delete(task_uuid: str):
+def delete(task_uuid: str) -> Response:
     """Delete a task."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return  # unreachable but helps type checker
+    assert task is not None
 
     # Only admin can delete tasks
     if not g.user.is_admin:
@@ -510,12 +512,12 @@ def delete(task_uuid: str):
 
 @bp.route("/<task_uuid>/comments", methods=["POST"])
 @login_required
-def add_comment(task_uuid: str):
+def add_comment(task_uuid: str) -> str | Response:
     """Add a comment to a task."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Check access for private tasks
     if not can_view_task(task, g.user):
@@ -553,17 +555,17 @@ def add_comment(task_uuid: str):
 
 @bp.route("/<task_uuid>/comments/<comment_uuid>/delete", methods=["POST"])
 @login_required
-def delete_comment(task_uuid: str, comment_uuid: str):
+def delete_comment(task_uuid: str, comment_uuid: str) -> str | Response:
     """Delete a comment."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     comment = Comment.get_by_uuid(comment_uuid)
     if comment is None or comment.task_id != task.id:
         abort(404)
-        return
+    assert comment is not None
 
     # Only admin can delete comments
     if not g.user.is_admin:
@@ -586,17 +588,17 @@ def delete_comment(task_uuid: str, comment_uuid: str):
 
 @bp.route("/<task_uuid>/comments/<comment_uuid>/edit", methods=["POST"])
 @login_required
-def edit_comment(task_uuid: str, comment_uuid: str):
+def edit_comment(task_uuid: str, comment_uuid: str) -> str | Response:
     """Edit a comment (admin can always edit, author within edit window)."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     comment = Comment.get_by_uuid(comment_uuid)
     if comment is None or comment.task_id != task.id:
         abort(404)
-        return
+    assert comment is not None
 
     # Admin can always edit; author can edit within window
     if not g.user.is_admin:
@@ -643,12 +645,12 @@ def edit_comment(task_uuid: str, comment_uuid: str):
 
 @bp.route("/<task_uuid>/attachments", methods=["POST"])
 @login_required
-def upload_attachment(task_uuid: str):
+def upload_attachment(task_uuid: str) -> str | Response:
     """Upload an attachment to a task."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Check access for private tasks
     if not can_view_task(task, g.user):
@@ -709,12 +711,12 @@ def upload_attachment(task_uuid: str):
 
 @bp.route("/<task_uuid>/attachments/<attachment_uuid>")
 @login_required
-def download_attachment(task_uuid: str, attachment_uuid: str):
+def download_attachment(task_uuid: str, attachment_uuid: str) -> Response:
     """Download an attachment."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Check access for private tasks
     if not can_view_task(task, g.user):
@@ -723,17 +725,17 @@ def download_attachment(task_uuid: str, attachment_uuid: str):
     attachment = Attachment.get_by_uuid(attachment_uuid)
     if attachment is None or attachment.task_id != task.id:
         abort(404)
-        return
+    assert attachment is not None
 
     blob = attachment.get_blob()
     if blob is None:
         abort(404)
-        return
+    assert blob is not None
 
     content = attachment_service.get_blob_content(blob)
     if content is None:
         abort(404)
-        return
+    assert content is not None
 
     return Response(
         content,
@@ -747,17 +749,17 @@ def download_attachment(task_uuid: str, attachment_uuid: str):
 
 @bp.route("/<task_uuid>/attachments/<attachment_uuid>/delete", methods=["POST"])
 @login_required
-def delete_attachment(task_uuid: str, attachment_uuid: str):
+def delete_attachment(task_uuid: str, attachment_uuid: str) -> str | Response:
     """Delete an attachment."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     attachment = Attachment.get_by_uuid(attachment_uuid)
     if attachment is None or attachment.task_id != task.id:
         abort(404)
-        return
+    assert attachment is not None
 
     # Only admin can delete attachments
     if not g.user.is_admin:
@@ -785,12 +787,12 @@ def delete_attachment(task_uuid: str, attachment_uuid: str):
 
 @bp.route("/<task_uuid>/watch", methods=["POST"])
 @login_required
-def watch(task_uuid: str):
+def watch(task_uuid: str) -> str | Response:
     """Start watching a task."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Check access for private tasks
     if not can_view_task(task, g.user):
@@ -814,12 +816,12 @@ def watch(task_uuid: str):
 
 @bp.route("/<task_uuid>/unwatch", methods=["POST"])
 @login_required
-def unwatch(task_uuid: str):
+def unwatch(task_uuid: str) -> str | Response:
     """Stop watching a task."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Check access for private tasks
     if not can_view_task(task, g.user):
@@ -843,12 +845,12 @@ def unwatch(task_uuid: str):
 
 @bp.route("/<task_uuid>/watchers", methods=["POST"])
 @login_required
-def add_watcher(task_uuid: str):
+def add_watcher(task_uuid: str) -> str | Response:
     """Add a user as a watcher (owner/admin only)."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Only owner or admin can manage watchers
     if task.owner_id != g.user.id and not g.user.is_admin:
@@ -875,12 +877,12 @@ def add_watcher(task_uuid: str):
 
 @bp.route("/<task_uuid>/watchers/<int:user_id>/remove", methods=["POST"])
 @login_required
-def remove_watcher(task_uuid: str, user_id: int):
+def remove_watcher(task_uuid: str, user_id: int) -> str | Response:
     """Remove a user from watchers (owner/admin only)."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Only owner or admin can manage watchers
     if task.owner_id != g.user.id and not g.user.is_admin:
@@ -902,17 +904,16 @@ def remove_watcher(task_uuid: str, user_id: int):
 
 @bp.route("/<task_uuid>/users/search")
 @login_required
-def search_users(task_uuid: str):
+def search_users(task_uuid: str) -> Response:
     """Search users for adding as watchers (returns JSON for Tom Select)."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return jsonify([])
+    assert task is not None
 
     # Only owner or admin can manage watchers
     if task.owner_id != g.user.id and not g.user.is_admin:
         abort(403)
-        return jsonify([])
 
     query = request.args.get("q", "").strip().lower()
 
@@ -950,17 +951,16 @@ def search_users(task_uuid: str):
 
 @bp.route("/<task_uuid>/tags/search")
 @login_required
-def search_tags(task_uuid: str):
+def search_tags(task_uuid: str) -> Response:
     """Search tags for adding to task (returns JSON for Tom Select)."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return jsonify([])
+    assert task is not None
 
     # Only owner or admin can manage tags
     if task.owner_id != g.user.id and not g.user.is_admin:
         abort(403)
-        return jsonify([])
 
     query = request.args.get("q", "").strip()
 
@@ -993,12 +993,12 @@ def search_tags(task_uuid: str):
 
 @bp.route("/<task_uuid>/tags", methods=["POST"])
 @login_required
-def add_tag(task_uuid: str):
+def add_tag(task_uuid: str) -> str | Response:
     """Add a tag to a task (supports tag_id or tag_name for inline creation)."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Only owner or admin can manage tags
     if task.owner_id != g.user.id and not g.user.is_admin:
@@ -1030,12 +1030,12 @@ def add_tag(task_uuid: str):
 
 @bp.route("/<task_uuid>/tags/<int:tag_id>/remove", methods=["POST"])
 @login_required
-def remove_tag(task_uuid: str, tag_id: int):
+def remove_tag(task_uuid: str, tag_id: int) -> str | Response:
     """Remove a tag from a task."""
     task = Task.get_by_uuid(task_uuid)
     if task is None:
         abort(404)
-        return
+    assert task is not None
 
     # Only owner or admin can manage tags
     if task.owner_id != g.user.id and not g.user.is_admin:

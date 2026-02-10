@@ -1,5 +1,7 @@
 """Tags blueprint for tag management (admin only)."""
 
+from typing import Any
+
 from flask import (
     Blueprint,
     abort,
@@ -9,6 +11,7 @@ from flask import (
     request,
     url_for,
 )
+from werkzeug.wrappers import Response
 
 from cadence.blueprints.auth import admin_required
 from cadence.models import TAG_COLORS, Tag
@@ -21,7 +24,7 @@ def is_htmx_request() -> bool:
     return request.headers.get("HX-Request") == "true"
 
 
-def render_partial_or_full(partial: str, full: str, **context):
+def render_partial_or_full(partial: str, full: str, **context: Any) -> str:
     """Render partial template for HTMX, full page otherwise."""
     template = partial if is_htmx_request() else full
     return render_template(template, **context)
@@ -29,7 +32,7 @@ def render_partial_or_full(partial: str, full: str, **context):
 
 @bp.route("/")
 @admin_required
-def index():
+def index() -> str:
     """List all tags with usage count."""
     tags = Tag.get_all()
 
@@ -52,12 +55,12 @@ def index():
 
 @bp.route("/<tag_uuid>/edit", methods=["GET", "POST"])
 @admin_required
-def edit(tag_uuid: str):
+def edit(tag_uuid: str) -> str | Response:
     """Edit a tag."""
     tag = Tag.get_by_uuid(tag_uuid)
     if tag is None:
         abort(404)
-        return
+    assert tag is not None
 
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -99,12 +102,12 @@ def edit(tag_uuid: str):
 
 @bp.route("/<tag_uuid>/delete", methods=["POST"])
 @admin_required
-def delete(tag_uuid: str):
+def delete(tag_uuid: str) -> Response:
     """Delete a tag."""
     tag = Tag.get_by_uuid(tag_uuid)
     if tag is None:
         abort(404)
-        return
+    assert tag is not None
 
     usage_count = tag.usage_count()
 
