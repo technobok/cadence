@@ -27,7 +27,7 @@
                 {% endif %}
                 {% endif %}
                 {% if g.user %}
-                <li><a href="{{ url_for('auth.settings') }}">{{ g.user.fullname or g.user.username }}</a></li>
+                <li><a href="{{ url_for('auth.settings') }}">{{ g.user.username }}</a></li>
                 <li><button type="button" class="outline secondary" onclick="location.href='{{ url_for('auth.logout') }}'">Logout</button></li>
                 {% else %}
                 <li><button type="button" onclick="location.href='{{ url_for('auth.login') }}'" class="outline">Login</button></li>
