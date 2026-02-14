@@ -23,7 +23,7 @@ make sync
 make init-db
 
 # Point Cadence at your Gatekeeper database (for authentication)
-export GATEKEEPER_DB=/path/to/gatekeeper/instance/gatekeeper.sqlite3
+make config-set KEY=gatekeeper.db_path VAL=/path/to/gatekeeper/instance/gatekeeper.sqlite3
 
 # Grant admin privileges to a Gatekeeper user
 .venv/bin/cadence-admin make-admin jsmith
@@ -52,13 +52,13 @@ All CLI commands (`cadence-admin`, `make config-*`, `make init-db`) and the web 
 
 ### Gatekeeper authentication
 
-Cadence uses [Gatekeeper](../gatekeeper/) for all authentication. Set `GATEKEEPER_DB` to the path of the Gatekeeper SQLite database:
+Cadence uses [Gatekeeper](../gatekeeper/) for all authentication. Set `gatekeeper.db_path` to the path of the Gatekeeper SQLite database:
 
 ```bash
-export GATEKEEPER_DB=/path/to/gatekeeper/instance/gatekeeper.sqlite3
+make config-set KEY=gatekeeper.db_path VAL=/path/to/gatekeeper/instance/gatekeeper.sqlite3
 ```
 
-Cadence reads the database in local mode (direct SQLite access, no network calls) for per-request session validation.
+The `GATEKEEPER_DB` environment variable can also be used (takes priority over the config setting). Cadence reads the database in local mode (direct SQLite access, no network calls) for per-request session validation.
 
 For login to work, Gatekeeper must have `server.login_url` configured (see the [Gatekeeper README](../gatekeeper/README.md#centralised-sso-login)). Unauthenticated users are redirected to Gatekeeper's login page, which sends a magic link via outbox. The magic link redirects back to Cadence's `/auth/verify` endpoint, which validates the token and sets a session cookie.
 

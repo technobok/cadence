@@ -55,6 +55,10 @@ REGISTRY: list[ConfigEntry] = [
     ConfigEntry(
         "backups.directory", ConfigType.STRING, "instance/backups", "Backup storage directory"
     ),
+    # -- gatekeeper --
+    ConfigEntry("gatekeeper.db_path", ConfigType.STRING, "", "Path to Gatekeeper SQLite database"),
+    ConfigEntry("gatekeeper.url", ConfigType.STRING, "", "Gatekeeper HTTP API base URL"),
+    ConfigEntry("gatekeeper.api_key", ConfigType.STRING, "", "Gatekeeper API key", secret=True),
     # -- auth --
     ConfigEntry(
         "auth.magic_link_expiry_seconds", ConfigType.INT, 3600, "Magic link token lifetime"
@@ -141,6 +145,9 @@ KEY_MAP: dict[str, str] = {
     "uploads.max_size_mb": "MAX_UPLOAD_SIZE_MB",
     "blobs.directory": "BLOBS_DIRECTORY",
     "backups.directory": "BACKUPS_DIRECTORY",
+    "gatekeeper.db_path": "GATEKEEPER_DB_PATH",
+    "gatekeeper.url": "GATEKEEPER_URL",
+    "gatekeeper.api_key": "GATEKEEPER_API_KEY",
     "auth.magic_link_expiry_seconds": "MAGIC_LINK_EXPIRY_SECONDS",
     "auth.trusted_session_days": "TRUSTED_SESSION_DAYS",
     "comments.edit_window_seconds": "COMMENT_EDIT_WINDOW_SECONDS",
@@ -176,6 +183,9 @@ INI_MAP: dict[tuple[str, str], str | None] = {
     ("uploads", "MAX_SIZE_MB"): "uploads.max_size_mb",
     ("blobs", "DIRECTORY"): "blobs.directory",
     ("backups", "DIRECTORY"): "backups.directory",
+    ("gatekeeper", "DB_PATH"): "gatekeeper.db_path",
+    ("gatekeeper", "URL"): "gatekeeper.url",
+    ("gatekeeper", "API_KEY"): "gatekeeper.api_key",
     ("auth", "MAGIC_LINK_EXPIRY_SECONDS"): "auth.magic_link_expiry_seconds",
     ("auth", "TRUSTED_SESSION_DAYS"): "auth.trusted_session_days",
     ("comments", "EDIT_WINDOW_SECONDS"): "comments.edit_window_seconds",
