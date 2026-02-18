@@ -91,9 +91,6 @@ def verify() -> str | Response:
 
     user, redirect_url = result
 
-    # Create auth token and set cookie
-    auth_token = gk.create_auth_token(user)
-
     # Check if user has a display_name set in cadence properties
     display_name = user_helpers.get_cadence_prop(gk, user.username, "display_name")
 
@@ -103,14 +100,7 @@ def verify() -> str | Response:
         response = redirect(redirect_url or url_for("index"))
         flash(f"Welcome, {display_name}!", "success")
 
-    response.set_cookie(
-        "gk_session",
-        auth_token,
-        max_age=86400 * 365,
-        httponly=True,
-        secure=not current_app.config.get("DEBUG", False),
-        samesite="Lax",
-    )
+    gk.set_session_cookie(response, user)
 
     return response
 
